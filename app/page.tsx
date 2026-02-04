@@ -1,32 +1,69 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTamboThread, TamboMessageProvider, useTamboCurrentMessage } from "@tambo-ai/react";
 import { cn } from "@/lib/utils";
+
+// Helper to extract text content from message
+function getMessageText(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object" && "text" in part) return part.text;
+        return "";
+      })
+      .join("");
+  }
+  if (content && typeof content === "object" && "text" in content) {
+    return (content as { text: string }).text;
+  }
+  return "";
+}
+
+// Component to render a single message's component
+function MessageComponent() {
+  const message = useTamboCurrentMessage();
+
+  // The message has renderedComponent which is the actual React element
+  if (message?.renderedComponent) {
+    return message.renderedComponent;
+  }
+
+  return null;
+}
 
 export default function Home() {
   const [taskInput, setTaskInput] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [showWorkspace, setShowWorkspace] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // Tambo thread hook - provides the current thread context
+  const {
+    thread,
+    sendThreadMessage,
+    isIdle,
+    generationStage
+  } = useTamboThread();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const demoPrompts = [
-    { label: "Revenue metrics", icon: "📊" },
-    { label: "Task progress", icon: "✓" },
-    { label: "System health", icon: "⚡" },
+    { label: "Analyze system health", icon: "📊" },
+    { label: "Create a deployment plan", icon: "📋" },
+    { label: "Review code quality", icon: "⚡" },
   ];
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!taskInput.trim()) return;
-    setIsGenerating(true);
-    // Simulate generation - will be replaced with TamboProvider
-    setTimeout(() => {
-      setIsGenerating(false);
-      setShowWorkspace(true);
-    }, 1500);
+
+    // Send message to Tambo
+    await sendThreadMessage(taskInput);
+    setTaskInput("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -35,6 +72,10 @@ export default function Home() {
       handleGenerate();
     }
   };
+
+  const isGenerating = !isIdle;
+  const messages = thread?.messages ?? [];
+  const hasMessages = messages.length > 0;
 
   return (
     <div className="relative min-h-screen bg-black text-white overflow-hidden">
@@ -190,9 +231,9 @@ export default function Home() {
         </div>
 
         {/* Workspace Container */}
-        <div className="w-full max-w-6xl flex-1">
+        <div className="w-full max-w-4xl flex-1">
           <div
-            className={`relative min-h-[500px] md:min-h-[550px] rounded-3xl border transition-all duration-500 ${showWorkspace
+            className={`relative min-h-[400px] rounded-3xl border transition-all duration-500 ${hasMessages
               ? "border-indigo-500/30 bg-zinc-950/60"
               : "border-zinc-800/80 bg-zinc-950/40"
               } backdrop-blur-sm overflow-hidden`}
@@ -211,16 +252,16 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-2 text-xs text-zinc-500">
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${showWorkspace ? "bg-emerald-400" : "bg-zinc-600"
+                  className={`w-1.5 h-1.5 rounded-full ${hasMessages ? "bg-emerald-400" : "bg-zinc-600"
                     }`}
                 />
-                {showWorkspace ? "Components Active" : "Ready"}
+                {hasMessages ? "Components Active" : "Ready"}
               </div>
             </div>
 
             {/* Workspace content area */}
-            <div className="relative p-6 md:p-8 min-h-[440px]">
-              {!showWorkspace ? (
+            <div className="relative p-6 md:p-8 min-h-[340px]">
+              {!hasMessages ? (
                 // Empty state
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                   {/* Animated rings */}
@@ -261,179 +302,45 @@ export default function Home() {
                   </p>
                 </div>
               ) : (
-                // Demo assembled components
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in-up">
-                  {/* Metric Card 1 */}
-                  <div className="group p-5 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/5">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs text-zinc-500 uppercase tracking-wider">
-                        Revenue
-                      </span>
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                        <svg
-                          className="w-4 h-4 text-emerald-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-white mb-1">
-                      $48.2K
-                    </div>
-                    <div className="text-sm text-emerald-400">
-                      +12.5% from last week
-                    </div>
-                  </div>
-
-                  {/* Metric Card 2 */}
-                  <div
-                    className="group p-5 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/5"
-                    style={{ animationDelay: "100ms" }}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs text-zinc-500 uppercase tracking-wider">
-                        Tasks
-                      </span>
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-                        <svg
-                          className="w-4 h-4 text-indigo-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-white mb-1">
-                      24/31
-                    </div>
-                    <div className="text-sm text-zinc-400">
-                      77% completion rate
-                    </div>
-                  </div>
-
-                  {/* Metric Card 3 */}
-                  <div
-                    className="group p-5 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/5"
-                    style={{ animationDelay: "200ms" }}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs text-zinc-500 uppercase tracking-wider">
-                        System
-                      </span>
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                        <svg
-                          className="w-4 h-4 text-amber-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M13 10V3L4 14h7v7l9-11h-7z"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-white mb-1">
-                      99.9%
-                    </div>
-                    <div className="text-sm text-zinc-400">
-                      Uptime this month
-                    </div>
-                  </div>
-
-                  {/* Chart placeholder */}
-                  <div
-                    className="md:col-span-2 p-5 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-zinc-800"
-                    style={{ animationDelay: "300ms" }}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm font-medium text-zinc-300">
-                        Performance Overview
-                      </span>
-                      <div className="flex gap-2 text-xs text-zinc-500">
-                        <span className="px-2 py-1 rounded bg-zinc-800">7D</span>
-                        <span className="px-2 py-1 rounded hover:bg-zinc-800 cursor-pointer">
-                          30D
-                        </span>
-                        <span className="px-2 py-1 rounded hover:bg-zinc-800 cursor-pointer">
-                          90D
-                        </span>
-                      </div>
-                    </div>
-                    <div className="h-32 flex items-end gap-2">
-                      {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88].map(
-                        (h, i) => (
-                          <div
-                            key={i}
-                            className="flex-1 rounded-t bg-gradient-to-t from-indigo-500/40 to-indigo-500/10 hover:from-indigo-500/60 hover:to-indigo-500/20 transition-all duration-300 cursor-pointer"
-                            style={{
-                              height: `${h}%`,
-                              animationDelay: `${i * 50}ms`,
-                            }}
-                          />
-                        )
+                // Tambo-rendered messages
+                <div className="space-y-6 animate-fade-in-up">
+                  {messages.map((message) => (
+                    <div key={message.id} className="space-y-4">
+                      {message.role === "user" && (
+                        <div className="flex items-center gap-2 text-sm text-zinc-400">
+                          <span className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center text-xs">
+                            ⚡
+                          </span>
+                          <span>{getMessageText(message.content)}</span>
+                        </div>
+                      )}
+                      {message.role === "assistant" && (
+                        <div className="pl-8">
+                          <TamboMessageProvider message={message}>
+                            <MessageComponent />
+                            {/* Show text content if no component */}
+                            {message.content && !message.renderedComponent && (
+                              <div className="text-zinc-300 text-sm whitespace-pre-wrap">
+                                {getMessageText(message.content)}
+                              </div>
+                            )}
+                          </TamboMessageProvider>
+                        </div>
                       )}
                     </div>
-                  </div>
+                  ))}
 
-                  {/* Activity feed */}
-                  <div
-                    className="p-5 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-zinc-800"
-                    style={{ animationDelay: "400ms" }}
-                  >
-                    <span className="text-sm font-medium text-zinc-300 block mb-4">
-                      Recent Activity
-                    </span>
-                    <div className="space-y-3">
-                      {[
-                        {
-                          text: "Dashboard updated",
-                          time: "2m ago",
-                          color: "bg-emerald-400",
-                        },
-                        {
-                          text: "New user signup",
-                          time: "5m ago",
-                          color: "bg-indigo-400",
-                        },
-                        {
-                          text: "Report generated",
-                          time: "12m ago",
-                          color: "bg-amber-400",
-                        },
-                      ].map((item, i) => (
-                        <div key={i} className="flex items-center gap-3 text-sm">
-                          <div
-                            className={`w-1.5 h-1.5 rounded-full ${item.color}`}
-                          />
-                          <span className="text-zinc-300 flex-1">
-                            {item.text}
-                          </span>
-                          <span className="text-zinc-600 text-xs">
-                            {item.time}
-                          </span>
-                        </div>
-                      ))}
+                  {isGenerating && (
+                    <div className="flex items-center gap-3 text-zinc-400">
+                      <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center animate-pulse">
+                        <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm">Assembling components...</span>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

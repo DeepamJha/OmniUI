@@ -42,15 +42,18 @@ This represents the END STATE of completed work.
 `,
         component: CommandResultPanel,
         propsSchema: z.object({
-            title: z.string().describe("Short title of what was analyzed/completed"),
+            title: z.string().default("Analysis Complete").describe("Short title of what was analyzed/completed"),
             status: z
                 .enum(["success", "warning", "error"])
+                .default("success")
                 .describe("Overall outcome - success if good, warning if concerns, error if problems"),
             summary: z
                 .string()
+                .default("Analysis completed successfully.")
                 .describe("One paragraph explaining the key finding or outcome"),
             items: z
                 .array(z.string())
+                .default([])
                 .describe("3-5 bullet points of specific findings or results"),
         }),
     },
@@ -75,13 +78,13 @@ Only use when the user wants an actionable, ordered plan.
 `,
         component: ExecutionPlan,
         propsSchema: z.object({
-            goal: z.string().describe("What the plan achieves"),
+            goal: z.string().default("Achieve the objective").describe("What the plan achieves"),
             steps: z.array(
                 z.object({
-                    title: z.string().describe("Action to take"),
-                    description: z.string().describe("How to do it"),
+                    title: z.string().default("Step").describe("Action to take"),
+                    description: z.string().default("Details").describe("How to do it"),
                 })
-            ).describe("3-7 ordered steps"),
+            ).default([]).describe("3-7 ordered steps"),
         }),
     },
 
@@ -105,17 +108,18 @@ This shows real-time or current STATUS with metrics, not analysis.
 `,
         component: SystemStatusPanel,
         propsSchema: z.object({
-            systemName: z.string().describe("Name of the system being checked"),
+            systemName: z.string().default("System").describe("Name of the system being checked"),
             overallStatus: z
                 .enum(["healthy", "warning", "critical"])
+                .default("healthy")
                 .describe("Overall system health"),
             metrics: z.array(
                 z.object({
-                    label: z.string().describe("Metric name like CPU, Memory, Uptime"),
-                    value: z.string().describe("Current value like 45%, 2.3GB, 99.9%"),
-                    status: z.enum(["healthy", "warning", "critical"]).describe("This metric's health"),
+                    label: z.string().default("Metric").describe("Metric name like CPU, Memory, Uptime"),
+                    value: z.string().default("N/A").describe("Current value like 45%, 2.3GB, 99.9%"),
+                    status: z.enum(["healthy", "warning", "critical"]).default("healthy").describe("This metric's health"),
                 })
-            ).describe("3-6 key metrics"),
+            ).default([]).describe("3-6 key metrics"),
         }),
     },
 ];
