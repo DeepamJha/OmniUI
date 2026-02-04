@@ -11,6 +11,7 @@
 import { z } from "zod";
 import type { TamboComponent } from "@tambo-ai/react";
 import { CommandResultPanel } from "../CommandResultPanel";
+import { ExecutionPlan } from "../ExecutionPlan";
 
 /**
  * Components Array - A collection of Tambo components to register
@@ -22,7 +23,7 @@ export const components: TamboComponent[] = [
     {
         name: "CommandResultPanel",
         description:
-            "Shows the result of a completed task or command with a summary and key outcomes",
+            "Shows the result of a completed task, analysis, or summary",
         component: CommandResultPanel,
         propsSchema: z.object({
             title: z.string().describe("Short title of what was done"),
@@ -35,6 +36,21 @@ export const components: TamboComponent[] = [
             items: z
                 .array(z.string())
                 .describe("Bullet points of key results or steps"),
+        }),
+    },
+    {
+        name: "ExecutionPlan",
+        description:
+            "Shows a step-by-step plan or roadmap to achieve a goal",
+        component: ExecutionPlan,
+        propsSchema: z.object({
+            goal: z.string().describe("What the plan is trying to achieve"),
+            steps: z.array(
+                z.object({
+                    title: z.string().describe("Step title"),
+                    description: z.string().describe("Step details"),
+                })
+            ).describe("Ordered list of steps to complete"),
         }),
     },
 ];
