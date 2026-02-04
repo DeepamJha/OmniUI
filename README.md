@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OmniUI
 
-## Getting Started
+**OmniUI** is a generative workspace where users describe a task in natural language and the interface dynamically assembles the required UI components in real time.
 
-First, run the development server:
+Built for the **Tambo Generative UI Hackathon**.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🚀 What is OmniUI?
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Most AI apps return **text**.  
+**OmniUI returns interfaces.**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Instead of chat messages, OmniUI generates:
+- Metric cards
+- Dashboards
+- Status panels
+- Task views
 
-## Learn More
+The **UI itself is the output**.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🧠 Core Idea
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+> "Describe what you need. Watch the workspace assemble itself."
 
-## Deploy on Vercel
+OmniUI uses **Tambo's Generative UI SDK** to decide:
+- which components to render
+- what props to pass
+- when to update the interface
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+All driven by natural language.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## ✨ Why this matters (Generative UI)
+
+- No fixed layouts
+- No hard-coded dashboards
+- The UI adapts to intent, not clicks
+
+This is **Generative UI**, not a chatbot.
+
+---
+
+## 🧪 Example Prompts
+
+Try:
+- `Show revenue metrics`
+- `Display task progress`
+- `Analyze system health`
+
+Each prompt dynamically materializes UI components inside the workspace.
+
+---
+
+## 🎛 UI Philosophy
+
+- Control-center / command-deck aesthetic  
+- Wide, immersive workspace (no chat bubbles)
+- Subtle grid + ambient background
+- Motion communicates "assembly"
+
+---
+
+## 🛠 Tech Stack
+
+- **Next.js (App Router)**
+- **React + TypeScript**
+- **Tailwind CSS**
+- **Tambo**
