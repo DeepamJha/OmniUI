@@ -70,3 +70,19 @@ Each prompt dynamically materializes UI components inside the workspace.
 - **React + TypeScript**
 - **Tailwind CSS**
 - **Tambo**
+
+---
+
+## 📌 Status
+
+🚧 **Hackathon build (v0.1)**
+
+Focused on clarity, demoability, and core generative UI behavior.
+
+More components and interactions coming soon.
+
+---
+
+## 👤 Author
+
+Built by **Deepam Jha**
