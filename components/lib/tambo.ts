@@ -110,14 +110,14 @@ This shows real-time or current STATUS with metrics, not analysis.
         propsSchema: z.object({
             systemName: z.string().default("System").describe("Name of the system being checked"),
             overallStatus: z
-                .enum(["healthy", "warning", "critical"])
+                .string()
                 .default("healthy")
-                .describe("Overall system health"),
+                .describe("Overall system health - healthy, warning, or critical"),
             metrics: z.array(
                 z.object({
                     label: z.string().default("Metric").describe("Metric name like CPU, Memory, Uptime"),
                     value: z.string().default("N/A").describe("Current value like 45%, 2.3GB, 99.9%"),
-                    status: z.enum(["healthy", "warning", "critical"]).default("healthy").describe("This metric's health"),
+                    status: z.string().default("healthy").describe("This metric's health - healthy, warning, or critical"),
                 })
             ).default([]).describe("3-6 key metrics"),
         }),

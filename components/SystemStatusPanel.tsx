@@ -1,8 +1,23 @@
 type Metric = {
     label: string;
     value: string;
-    status: "healthy" | "warning" | "critical";
+    status: string;
 };
+
+// Normalize status value to one of our known types
+function normalizeStatus(status: string): "healthy" | "warning" | "critical" {
+    const normalized = status?.toLowerCase();
+    if (["healthy", "operational", "online", "ok", "good", "up"].includes(normalized)) {
+        return "healthy";
+    }
+    if (["warning", "degraded", "slow", "partial"].includes(normalized)) {
+        return "warning";
+    }
+    if (["critical", "error", "offline", "down", "failed"].includes(normalized)) {
+        return "critical";
+    }
+    return "healthy"; // Default to healthy for unknown
+}
 
 export function SystemStatusPanel({
     systemName,
@@ -10,9 +25,11 @@ export function SystemStatusPanel({
     metrics,
 }: {
     systemName: string;
-    overallStatus: "healthy" | "warning" | "critical";
+    overallStatus: string;
     metrics: Metric[];
 }) {
+    const status = normalizeStatus(overallStatus);
+
     const statusColors = {
         healthy: "text-green-400",
         warning: "text-yellow-400",
@@ -32,26 +49,29 @@ export function SystemStatusPanel({
     };
 
     return (
-        <div className={`rounded-2xl border ${statusBorder[overallStatus]} p-6 space-y-4`}>
+        <div className={`rounded-2xl border ${statusBorder[status]} p-6 space-y-4`}>
             <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-base text-white">{systemName}</h3>
-                <span className={`text-sm flex items-center gap-2 ${statusColors[overallStatus]}`}>
-                    <span>{statusIcon[overallStatus]}</span>
+                <span className={`text-sm flex items-center gap-2 ${statusColors[status]}`}>
+                    <span>{statusIcon[status]}</span>
                     {overallStatus.toUpperCase()}
                 </span>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {metrics.map((metric, i) => (
-                    <div key={i} className="space-y-1">
-                        <div className="text-xs text-gray-500 uppercase tracking-wide">
-                            {metric.label}
+                {metrics.map((metric, i) => {
+                    const metricStatus = normalizeStatus(metric.status);
+                    return (
+                        <div key={i} className="space-y-1">
+                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                                {metric.label}
+                            </div>
+                            <div className={`font-mono text-lg ${statusColors[metricStatus]}`}>
+                                {metric.value}
+                            </div>
                         </div>
-                        <div className={`font-mono text-lg ${statusColors[metric.status]}`}>
-                            {metric.value}
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
