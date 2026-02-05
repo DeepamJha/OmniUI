@@ -66,29 +66,48 @@ export default function Home() {
       // Skip if already processed or not assistant message
       if (message.role !== 'assistant' || processedMessageIds.current.has(message.id)) return;
 
+      // Debug: Log all assistant messages
+      console.log('📩 Processing message:', message.id, message);
+
       // If AI generated a component, create an artifact
       if (message.renderedComponent) {
-        // Get component name from the message
-        const componentName = (message as any).componentName ||
-          (message.renderedComponent?.type as any)?.name ||
-          'CommandResultPanel';
+        console.log('🧩 Found renderedComponent:', message.renderedComponent);
 
-        // Find the schema for this component
+        // Extract component type - try multiple methods
+        const componentType = message.renderedComponent?.type as any;
+        const componentName =
+          (message as any).componentName ||  // Direct from message
+          componentType?.displayName ||       // React displayName
+          componentType?.name ||              // Function name
+          (typeof componentType === 'string' ? componentType : null) || // String type
+          'CommandResultPanel';               // Fallback
+
+        console.log('📋 Detected component:', componentName);
+
+        // Extract props from the React element
+        const props = (message.renderedComponent as any)?.props || {};
+        console.log('📦 Extracted props:', props);
+
+        // Find the schema for this component from our registry
         const componentConfig = components.find((c) => c.name === componentName);
-        if (componentConfig && componentConfig.propsSchema) {
-          // Extract props from the rendered component
-          const props = (message.renderedComponent as any)?.props || {};
 
-          // Create artifact with schema
-          artifactSystem.createArtifact(
+        if (componentConfig && componentConfig.propsSchema) {
+          // Create artifact with the extracted props
+          const artifactId = artifactSystem.createArtifact(
             componentName,
-            { ...props, messageId: message.id },
+            props,
             componentConfig.propsSchema as any,
-            props?.title || componentName
+            props?.title || props?.systemName || componentName
           );
 
+          console.log('✅ Created artifact:', artifactId);
           processedMessageIds.current.add(message.id);
+        } else {
+          console.warn('⚠️ No schema found for component:', componentName);
+          console.log('Available components:', components.map(c => c.name));
         }
+      } else {
+        console.log('💬 Message has no renderedComponent', message.content);
       }
     });
   }, [thread?.messages, artifactSystem]);
