@@ -43,19 +43,10 @@ This represents the END STATE of completed work.
 `,
         component: CommandResultPanel,
         propsSchema: z.object({
-            title: z.string().default("Analysis Complete").describe("Short title of what was analyzed/completed"),
-            status: z
-                .enum(["success", "warning", "error"])
-                .default("success")
-                .describe("Overall outcome - success if good, warning if concerns, error if problems"),
-            summary: z
-                .string()
-                .default("Analysis completed successfully.")
-                .describe("One paragraph explaining the key finding or outcome"),
-            items: z
-                .array(z.string())
-                .default([])
-                .describe("3-5 bullet points of specific findings or results"),
+            title: z.string().catch("Analysis Complete").describe("Short title of what was analyzed/completed"),
+            status: z.string().catch("success").describe("Overall outcome - success, warning, or error"),
+            summary: z.string().catch("Analysis completed successfully.").describe("One paragraph explaining the key finding or outcome"),
+            items: z.array(z.string().catch("")).catch([]).describe("3-5 bullet points of specific findings or results"),
         }),
     },
 
@@ -79,13 +70,13 @@ Only use when the user wants an actionable, ordered plan.
 `,
         component: ExecutionPlan,
         propsSchema: z.object({
-            goal: z.string().default("Achieve the objective").describe("What the plan achieves"),
+            goal: z.string().catch("Achieve the objective").describe("What the plan achieves"),
             steps: z.array(
                 z.object({
-                    title: z.string().default("Step").describe("Action to take"),
-                    description: z.string().default("Details").describe("How to do it"),
+                    title: z.string().catch("Step").describe("Action to take"),
+                    description: z.string().catch("Details").describe("How to do it"),
                 })
-            ).default([]).describe("3-7 ordered steps"),
+            ).catch([]).describe("3-7 ordered steps"),
         }),
     },
 
@@ -109,18 +100,15 @@ This shows real-time or current STATUS with metrics, not analysis.
 `,
         component: SystemStatusPanel,
         propsSchema: z.object({
-            systemName: z.string().default("System").describe("Name of the system being checked"),
-            overallStatus: z
-                .string()
-                .default("healthy")
-                .describe("Overall system health - healthy, warning, or critical"),
+            systemName: z.string().catch("System").describe("Name of the system being checked"),
+            overallStatus: z.string().catch("healthy").describe("Overall system health - healthy, warning, or critical"),
             metrics: z.array(
                 z.object({
-                    label: z.string().default("Metric").describe("Metric name like CPU, Memory, Uptime"),
-                    value: z.string().default("N/A").describe("Current value like 45%, 2.3GB, 99.9%"),
-                    status: z.string().default("healthy").describe("This metric's health - healthy, warning, or critical"),
+                    label: z.string().catch("Metric").describe("Metric name like CPU, Memory, Uptime"),
+                    value: z.string().catch("N/A").describe("Current value like 45%, 2.3GB, 99.9%"),
+                    status: z.string().catch("healthy").describe("This metric's health - healthy, warning, or critical"),
                 })
-            ).default([]).describe("3-6 key metrics"),
+            ).catch([]).describe("3-6 key metrics"),
         }),
     },
 
