@@ -288,21 +288,54 @@ function applyUpdateItem(artifact: Artifact, intent: MutationIntent, source: 'us
     const arrayField = findArrayField(state)!;
     const array = [...state[arrayField]];
 
-    const index = intent.details.itemIndex === -1
-        ? array.length - 1
-        : intent.details.itemIndex!;
+    const index =
+        intent.details.itemIndex === -1
+            ? array.length - 1
+            : intent.details.itemIndex!;
 
     const previousValue = array[index];
-    const updatedItem = intent.details.property
-        ? { ...array[index], [intent.details.property]: intent.details.value }
-        : { ...array[index], ...intent.details.value };
+
+    let updatedItem;
+
+    // Case 1: Explicit property update
+    if (intent.details.property) {
+        updatedItem = {
+            ...array[index],
+            [intent.details.property]: intent.details.value,
+        };
+    }
+    // Case 2: Object merge update
+    else if (
+        intent.details.value &&
+        typeof intent.details.value === 'object' &&
+        !Array.isArray(intent.details.value)
+    ) {
+        updatedItem = {
+            ...array[index],
+            ...intent.details.value,
+        };
+    }
+    // Case 3: Invalid update
+    else {
+        return {
+            success: false,
+            error: 'Invalid update: value must be an object when no property is specified',
+        };
+    }
 
     array[index] = updatedItem;
 
     return {
         success: true,
         newState: { ...state, [arrayField]: array },
-        mutation: createMutation(artifact.id, 'update_item', [arrayField, String(index)], previousValue, source, intent.originalMessage),
+        mutation: createMutation(
+            artifact.id,
+            'update_item',
+            [arrayField, String(index)],
+            previousValue,
+            source,
+            intent.originalMessage
+        ),
     };
 }
 
