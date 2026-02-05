@@ -28,6 +28,61 @@ function getMessageText(content: unknown): string {
   return "";
 }
 
+// ✅ Schema-backed artifact component names
+const ARTIFACT_COMPONENT_NAMES = new Set([
+  'CommandResultPanel',
+  'ExecutionPlan',
+  'SystemStatusPanel',
+]);
+
+/**
+ * 🔍 Walk the React tree to find actual artifact component
+ * Unwraps providers like TamboMessageProvider to find schema-backed components
+ */
+function findArtifactComponent(node: React.ReactNode): {
+  node: React.ReactElement;
+  name: string;
+  props: any;
+} | null {
+  if (!node || typeof node !== 'object') return null;
+
+  const element = node as React.ReactElement;
+
+  // Get component name
+  const componentType = element.type;
+  const componentName =
+    (componentType as any)?.displayName ||
+    (componentType as any)?.name ||
+    (typeof componentType === 'string' ? componentType : null);
+
+  // Check if this is a schema-backed artifact component
+  if (componentName && ARTIFACT_COMPONENT_NAMES.has(componentName)) {
+    console.log('✅ Found artifact component:', componentName);
+    return {
+      node: element,
+      name: componentName,
+      props: element.props || {},
+    };
+  }
+
+  // Otherwise, walk children to find artifact component
+  const elementProps = element.props as { children?: React.ReactNode } | undefined;
+  const children = elementProps?.children;
+
+  if (!children) return null;
+
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const found = findArtifactComponent(child);
+      if (found) return found;
+    }
+  } else {
+    return findArtifactComponent(children);
+  }
+
+  return null;
+}
+
 // Component to render a single message's component AND capture as artifact
 function MessageComponent({
   onCaptureArtifact,
@@ -44,22 +99,27 @@ function MessageComponent({
     if (!message?.id) return;
     if (capturedRef.current.has(message.id)) return;
 
-    // If we have a rendered component, capture it
+    // If we have a rendered component, try to find the actual artifact
     if (message.renderedComponent) {
-      console.log('🎯 MessageComponent captured renderedComponent:', message.id);
+      console.log('🎯 MessageComponent received renderedComponent:', message.id);
 
-      const componentType = (message.renderedComponent as any)?.type;
-      const componentName =
-        (message as any).componentName ||
-        componentType?.displayName ||
-        componentType?.name ||
-        (typeof componentType === 'string' ? componentType : null) ||
-        'CommandResultPanel';
+      // ✅ Walk tree to find schema-backed artifact component
+      const artifact = findArtifactComponent(message.renderedComponent);
 
-      const props = (message.renderedComponent as any)?.props || {};
-
-      capturedRef.current.add(message.id);
-      onCaptureArtifact?.(message.id, message.renderedComponent, componentName, props);
+      if (artifact) {
+        console.log('✅ Found artifact component:', artifact.name, artifact.props);
+        capturedRef.current.add(message.id);
+        onCaptureArtifact?.(message.id, artifact.node, artifact.name, artifact.props);
+      } else {
+        // No schema-backed component found - check for text content
+        console.warn('⚠️ No artifact component found in tree, checking text content');
+        const textContent = getMessageText(message.content);
+        if (textContent && textContent.trim().length > 0) {
+          console.log('💬 Using text fallback for:', message.id);
+          capturedRef.current.add(message.id);
+          onTextFallback?.(textContent);
+        }
+      }
     }
     // If no component but we have text content, use fallback
     else {
