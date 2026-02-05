@@ -174,7 +174,7 @@ export function EditableCheckbox({
 }
 
 /**
- * Inline editable select/dropdown
+ * Inline editable select/dropdown with custom styling
  */
 export function EditableSelect({
     artifactId,
@@ -189,11 +189,27 @@ export function EditableSelect({
     options: string[] | { label: string; value: string }[];
     className?: string;
 }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
     const updateArtifact = useArtifactStore(state => state.updateArtifact);
     const addMutation = useArtifactStore(state => state.addMutation);
     const getArtifact = useArtifactStore(state => state.getArtifact);
 
+    // Close on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [isOpen]);
+
     const handleChange = (newValue: string) => {
+        setIsOpen(false);
         if (newValue === value) return;
 
         const artifact = getArtifact(artifactId);
@@ -228,18 +244,54 @@ export function EditableSelect({
         typeof opt === 'string' ? { label: opt, value: opt } : opt
     );
 
+    const currentOption = normalizedOptions.find(o => o.value === value) || normalizedOptions[0];
+
     return (
-        <select
-            value={value}
-            onChange={(e) => handleChange(e.target.value)}
-            className={`bg-white/5 border border-white/10 rounded px-2 py-1 text-sm cursor-pointer hover:border-white/20 transition-colors ${className}`}
-        >
-            {normalizedOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                </option>
-            ))}
-        </select>
+        <div ref={dropdownRef} className={`relative inline-block ${className}`}>
+            {/* Trigger button */}
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm
+                    bg-gray-800/80 border border-gray-700/50 
+                    hover:border-blue-500/50 hover:bg-gray-700/80
+                    transition-all duration-200 cursor-pointer
+                    backdrop-blur-sm"
+            >
+                <span className="text-gray-200">{currentOption?.label}</span>
+                <svg
+                    className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            {/* Dropdown menu */}
+            {isOpen && (
+                <div className="absolute top-full left-0 mt-1 z-50 min-w-[160px]
+                    bg-gray-900/95 backdrop-blur-xl border border-gray-700/50 rounded-lg
+                    shadow-xl shadow-black/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    {normalizedOptions.map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => handleChange(opt.value)}
+                            className={`w-full px-3 py-2 text-left text-sm transition-colors
+                                flex items-center gap-2
+                                ${opt.value === value
+                                    ? 'bg-blue-500/20 text-blue-300'
+                                    : 'text-gray-300 hover:bg-gray-800/80 hover:text-white'}`}
+                        >
+                            {opt.value === value && (
+                                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                            )}
+                            <span className={opt.value !== value ? 'ml-6' : ''}>{opt.label}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 
