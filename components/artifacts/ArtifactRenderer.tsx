@@ -1,13 +1,17 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useArtifactStore, useArtifactHydration } from '@/lib/artifacts/store';
-import type { Artifact } from '@/lib/artifacts/types';
+import type { Artifact, Mutation } from '@/lib/artifacts/types';
+
+interface ArtifactCanvasProps {
+    onAction?: (prompt: string) => void;
+}
 
 /**
  * Canvas with proper hydration and empty state handling
  */
-export function ArtifactCanvas() {
+export function ArtifactCanvas({ onAction }: ArtifactCanvasProps = {}) {
     const hasHydrated = useArtifactHydration();
     const artifacts = useArtifactStore((state) => state.artifacts);
 
@@ -51,16 +55,222 @@ export function ArtifactCanvas() {
     return (
         <div className="space-y-6">
             {artifactIds.map(id => (
-                <ArtifactRenderer key={id} artifactId={id} />
+                <ArtifactRenderer key={id} artifactId={id} onAction={onAction} />
             ))}
         </div>
     );
 }
 
 /**
- * Renders a single artifact with header showing ID and type
+ * Mutation History Dropdown Component 
  */
-export function ArtifactRenderer({ artifactId }: { artifactId: string }) {
+function MutationHistoryDropdown({ artifactId, currentVersion }: { artifactId: string; currentVersion: number }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const mutations = useArtifactStore((state) =>
+        state.mutations.filter(m => m.artifactId === artifactId)
+    );
+    const undoLastMutation = useArtifactStore((state) => state.undoLastMutation);
+
+    if (mutations.length === 0 && currentVersion === 1) return null;
+
+    const handleUndo = () => {
+        const success = undoLastMutation(artifactId);
+        if (success) {
+            console.log(`✅ Undid last mutation on ${artifactId}`);
+        }
+    };
+
+    return (
+        <div className="relative flex items-center gap-2">
+            {/* Version Badge with Dropdown */}
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 transition-colors text-xs"
+            >
+                <span className="text-purple-400">v{currentVersion}</span>
+                {mutations.length > 0 && (
+                    <span className="text-gray-500">({mutations.length} changes)</span>
+                )}
+                <svg className={`w-3 h-3 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            {/* Undo Button */}
+            {mutations.length > 0 && (
+                <button
+                    onClick={handleUndo}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors text-xs text-yellow-400"
+                    title="Undo last change"
+                >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    Undo
+                </button>
+            )}
+
+            {/* Dropdown Menu */}
+            {isOpen && mutations.length > 0 && (
+                <div className="absolute top-full left-0 mt-2 w-72 rounded-xl bg-zinc-900 border border-white/10 shadow-xl z-50 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-white/5">
+                        <p className="text-xs text-gray-500 font-medium">Mutation History</p>
+                    </div>
+                    <div className="max-h-48 overflow-auto">
+                        {mutations.slice().reverse().map((mutation, i) => (
+                            <MutationHistoryItem key={mutation.id} mutation={mutation} isLatest={i === 0} />
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/**
+ * Single mutation history item
+ */
+function MutationHistoryItem({ mutation, isLatest }: { mutation: Mutation; isLatest: boolean }) {
+    const formatOperation = (op: string) => {
+        const labels: Record<string, string> = {
+            'add_item': '➕ Added',
+            'remove_item': '➖ Removed',
+            'update_item': '✏️ Updated',
+            'update_property': '🔧 Changed',
+            'reorder_items': '↕️ Reordered',
+            'bulk_update': '📦 Bulk update',
+        };
+        return labels[op] || op;
+    };
+
+    return (
+        <div className={`px-3 py-2 border-b border-white/5 last:border-b-0 ${isLatest ? 'bg-blue-500/5' : ''}`}>
+            <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-white">
+                    {formatOperation(mutation.operation)}
+                </span>
+                <span className="text-xs text-gray-600">
+                    {new Date(mutation.timestamp).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                    })}
+                </span>
+            </div>
+            {mutation.reason && (
+                <p className="text-xs text-gray-500 mt-1 truncate">{mutation.reason}</p>
+            )}
+            <span className={`text-xs mt-1 inline-block ${mutation.source === 'user' ? 'text-green-400' : 'text-blue-400'}`}>
+                {mutation.source === 'user' ? '👤 User' : '🤖 AI'}
+            </span>
+        </div>
+    );
+}
+
+/**
+ * Related Artifacts Section
+ */
+function RelatedArtifacts({ artifactId }: { artifactId: string }) {
+    const relationships = useArtifactStore((state) =>
+        state.relationships.filter(r => r.sourceId === artifactId || r.targetId === artifactId)
+    );
+    const artifacts = useArtifactStore((state) => state.artifacts);
+
+    if (relationships.length === 0) return null;
+
+    const getRelatedId = (rel: typeof relationships[0]) =>
+        rel.sourceId === artifactId ? rel.targetId : rel.sourceId;
+
+    const typeLabels: Record<string, string> = {
+        'references': '🔗',
+        'depends_on': '⬆️',
+        'conflicts_with': '⚠️',
+        'derived_from': '📑',
+        'similar_to': '≈',
+    };
+
+    return (
+        <div className="mt-4 pt-4 border-t border-white/5">
+            <p className="text-xs text-gray-500 mb-2">Related Artifacts</p>
+            <div className="flex flex-wrap gap-2">
+                {relationships.map(rel => {
+                    const relatedId = getRelatedId(rel);
+                    const relatedArtifact = artifacts[relatedId];
+                    if (!relatedArtifact) return null;
+
+                    return (
+                        <a
+                            key={rel.id}
+                            href={`#artifact-${relatedId}`}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 hover:border-indigo-500/30 transition-colors text-xs"
+                        >
+                            <span>{typeLabels[rel.type] || '🔗'}</span>
+                            <span className="text-blue-400 font-mono">#{relatedId}</span>
+                            <span className="text-gray-500">{relatedArtifact.type}</span>
+                        </a>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Artifact Actions (suggested next steps)
+ */
+function ArtifactActions({ artifact, onAction }: { artifact: Artifact; onAction?: (prompt: string) => void }) {
+    // Generate contextual actions based on artifact type
+    const getActions = () => {
+        const actions: { label: string; prompt: string; icon: string }[] = [];
+
+        if (artifact.type === 'ExecutionPlan') {
+            const steps = artifact.state?.steps || [];
+            if (steps.length > 0) {
+                actions.push(
+                    { label: 'Add a step', prompt: `Add a new step to plan #${artifact.id}`, icon: '➕' },
+                    { label: 'Optimize timeline', prompt: `Optimize the timeline for plan #${artifact.id}`, icon: '⚡' },
+                );
+            }
+        } else if (artifact.type === 'SystemStatusPanel') {
+            actions.push(
+                { label: 'Diagnose issues', prompt: `Diagnose issues in system status #${artifact.id}`, icon: '🔍' },
+                { label: 'Get recommendations', prompt: `Get recommendations based on status #${artifact.id}`, icon: '💡' },
+            );
+        } else if (artifact.type === 'CommandResultPanel') {
+            actions.push(
+                { label: 'Expand analysis', prompt: `Expand the analysis in #${artifact.id}`, icon: '📊' },
+                { label: 'Create action plan', prompt: `Create an action plan based on #${artifact.id}`, icon: '📋' },
+            );
+        }
+
+        return actions;
+    };
+
+    const actions = getActions();
+    if (actions.length === 0) return null;
+
+    return (
+        <div className="mt-4 pt-4 border-t border-white/5">
+            <p className="text-xs text-gray-500 mb-2">Suggested Actions</p>
+            <div className="flex flex-wrap gap-2">
+                {actions.map((action, i) => (
+                    <button
+                        key={i}
+                        onClick={() => onAction?.(action.prompt)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors text-xs text-indigo-300"
+                    >
+                        <span>{action.icon}</span>
+                        {action.label}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Renders a single artifact with header showing ID, type, version, and mutation history
+ */
+export function ArtifactRenderer({ artifactId, onAction }: { artifactId: string; onAction?: (prompt: string) => void }) {
     const artifact = useArtifactStore((state) => state.artifacts[artifactId]);
     const deleteArtifact = useArtifactStore((state) => state.deleteArtifact);
 
@@ -81,19 +291,16 @@ export function ArtifactRenderer({ artifactId }: { artifactId: string }) {
     }
 
     return (
-        <div className="relative group">
+        <div id={`artifact-${artifactId}`} className="relative group">
             {/* Artifact header */}
-            <div className="flex items-center justify-between mb-3 text-sm">
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between mb-3 text-sm flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-blue-400 font-mono text-xs">#{artifactId}</span>
                     <span className="text-gray-500">•</span>
                     <span className="text-gray-400">{artifact.type}</span>
-                    {artifact.version > 1 && (
-                        <>
-                            <span className="text-gray-500">•</span>
-                            <span className="text-gray-500 text-xs">v{artifact.version}</span>
-                        </>
-                    )}
+
+                    {/* Mutation History Dropdown */}
+                    <MutationHistoryDropdown artifactId={artifactId} currentVersion={artifact.version} />
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -120,6 +327,12 @@ export function ArtifactRenderer({ artifactId }: { artifactId: string }) {
 
             {/* Artifact content */}
             <ArtifactContent artifact={artifact} />
+
+            {/* Related Artifacts */}
+            <RelatedArtifacts artifactId={artifactId} />
+
+            {/* Suggested Actions */}
+            <ArtifactActions artifact={artifact} onAction={onAction} />
         </div>
     );
 }

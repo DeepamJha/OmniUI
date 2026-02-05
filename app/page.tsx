@@ -387,8 +387,12 @@ export default function Home() {
               ) : (
                 // Render artifacts and messages
                 <div className="space-y-6 animate-fade-in-up">
-                  {/* Artifact Canvas - shows persisted artifacts */}
-                  <ArtifactCanvas />
+                  {/* Artifact Canvas - shows persisted artifacts with action support */}
+                  <ArtifactCanvas onAction={(prompt) => {
+                    setTaskInput(prompt);
+                    // Optionally auto-send
+                    // handleGenerate();
+                  }} />
 
                   {/* Current message stream (for streaming responses) */}
                   {messages.filter(m => m.role === 'assistant' && !processedMessageIds.current.has(m.id)).map((message) => (
