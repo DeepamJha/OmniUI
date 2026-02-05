@@ -2,6 +2,9 @@
 
 import { TamboProvider, currentTimeContextHelper, currentPageContextHelper } from "@tambo-ai/react";
 import { components } from "@/components/lib/tambo";
+import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
+import type { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 
 // Custom context helper for OmniUI workspace state
 const workspaceContextHelper = () => {
@@ -47,9 +50,34 @@ const availableComponentsHelper = () => ({
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {
+    const [accessToken, setAccessToken] = useState<string | undefined>();
+    const [user, setUser] = useState<User | null>(null);
+    const supabase = createClient();
+
+    useEffect(() => {
+        // Get initial session
+        const getInitialSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            setAccessToken(session?.access_token);
+            setUser(session?.user ?? null);
+        };
+        getInitialSession();
+
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            (_event: AuthChangeEvent, session: Session | null) => {
+                setAccessToken(session?.access_token);
+                setUser(session?.user ?? null);
+            }
+        );
+
+        return () => subscription.unsubscribe();
+    }, [supabase]);
+
     return (
         <TamboProvider
             apiKey={process.env.NEXT_PUBLIC_TAMBO_API_KEY!}
+            userToken={accessToken}
             components={components}
             contextHelpers={{
                 // Prebuilt helpers
@@ -58,9 +86,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 // Custom helpers
                 workspace: workspaceContextHelper,
                 availableComponents: availableComponentsHelper,
+                // User context
+                currentUser: () => user ? {
+                    id: user.id,
+                    email: user.email,
+                    name: user.user_metadata?.full_name || user.email?.split('@')[0],
+                } : null,
             }}
         >
             {children}
         </TamboProvider>
     );
 }
+
