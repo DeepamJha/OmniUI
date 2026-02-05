@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTamboThread, TamboMessageProvider, useTamboCurrentMessage } from "@tambo-ai/react";
 import { cn } from "@/lib/utils";
+import { useArtifactSystem } from "@/lib/hooks/use-artifact-system";
+import { ArtifactCanvas } from "@/components/artifacts/ArtifactRenderer";
+import { components } from "@/components/lib/tambo";
 
 // Helper to extract text content from message
 function getMessageText(content: unknown): string {
@@ -39,18 +42,56 @@ function MessageComponent() {
 export default function Home() {
   const [taskInput, setTaskInput] = useState("");
   const [mounted, setMounted] = useState(false);
+  const processedMessageIds = useRef<Set<string>>(new Set());
 
   // Tambo thread hook - provides the current thread context
   const {
     thread,
     sendThreadMessage,
     isIdle,
-    generationStage
   } = useTamboThread();
+
+  // Artifact system
+  const artifactSystem = useArtifactSystem();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Effect to capture AI-generated components and convert to artifacts
+  useEffect(() => {
+    if (!thread?.messages) return;
+
+    thread.messages.forEach((message) => {
+      // Skip if already processed or not assistant message
+      if (message.role !== 'assistant' || processedMessageIds.current.has(message.id)) return;
+
+      // If AI generated a component, create an artifact
+      if (message.renderedComponent) {
+        // Get component name from the message
+        const componentName = (message as any).componentName ||
+          (message.renderedComponent?.type as any)?.name ||
+          'CommandResultPanel';
+
+        // Find the schema for this component
+        const componentConfig = components.find((c) => c.name === componentName);
+        if (componentConfig && componentConfig.propsSchema) {
+          // Extract props from the rendered component
+          const props = (message.renderedComponent as any)?.props || message.renderedComponent;
+
+          // Create artifact
+          artifactSystem.createArtifact(
+            componentName,
+            { ...props, messageId: message.id },
+            componentConfig.propsSchema as any, // Cast to any for Zod compatibility
+            props?.title || componentName
+          );
+
+          processedMessageIds.current.add(message.id);
+        }
+      }
+    });
+  }, [thread?.messages, artifactSystem]);
 
   const demoPrompts = [
     { label: "Analyze system health", icon: "📊" },
@@ -61,7 +102,24 @@ export default function Home() {
   const handleGenerate = async () => {
     if (!taskInput.trim()) return;
 
-    // Send message to Tambo
+    // Check if this is a mutation request
+    const analysis = artifactSystem.processMessage(taskInput);
+
+    if (analysis.isMutation && analysis.intent && analysis.artifactId) {
+      // Execute mutation locally - no AI call needed
+      const result = artifactSystem.executeMutation(
+        analysis.artifactId,
+        analysis.intent,
+        taskInput
+      );
+
+      if (result.success) {
+        setTaskInput("");
+        return; // Don't send to AI, we handled it
+      }
+    }
+
+    // Normal AI request
     await sendThreadMessage(taskInput);
     setTaskInput("");
   };
@@ -75,7 +133,8 @@ export default function Home() {
 
   const isGenerating = !isIdle;
   const messages = thread?.messages ?? [];
-  const hasMessages = messages.length > 0;
+  const hasArtifacts = Object.keys(artifactSystem.artifacts).length > 0;
+  const hasContent = messages.length > 0 || hasArtifacts;
 
   return (
     <div className="relative min-h-screen bg-black text-white overflow-hidden">
@@ -107,6 +166,11 @@ export default function Home() {
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-zinc-400 mb-6 backdrop-blur-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Generative Workspace Active
+            {hasArtifacts && (
+              <span className="ml-2 text-indigo-400">
+                • {Object.keys(artifactSystem.artifacts).length} artifact{Object.keys(artifactSystem.artifacts).length !== 1 ? 's' : ''}
+              </span>
+            )}
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-4">
@@ -157,7 +221,7 @@ export default function Home() {
                 value={taskInput}
                 onChange={(e) => setTaskInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Describe your task..."
+                placeholder={hasArtifacts ? "Type a command or mutate artifacts..." : "Describe your task..."}
                 disabled={isGenerating}
                 className="flex-1 h-12 bg-transparent text-white text-lg placeholder-zinc-500 focus:outline-none disabled:opacity-50"
               />
@@ -233,7 +297,7 @@ export default function Home() {
         {/* Workspace Container */}
         <div className="w-full max-w-4xl flex-1">
           <div
-            className={`relative min-h-[400px] rounded-3xl border transition-all duration-500 ${hasMessages
+            className={`relative min-h-[400px] rounded-3xl border transition-all duration-500 ${hasContent
               ? "border-indigo-500/30 bg-zinc-950/60"
               : "border-zinc-800/80 bg-zinc-950/40"
               } backdrop-blur-sm overflow-hidden`}
@@ -252,16 +316,16 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-2 text-xs text-zinc-500">
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${hasMessages ? "bg-emerald-400" : "bg-zinc-600"
+                  className={`w-1.5 h-1.5 rounded-full ${hasContent ? "bg-emerald-400" : "bg-zinc-600"
                     }`}
                 />
-                {hasMessages ? "Components Active" : "Ready"}
+                {hasArtifacts ? `${Object.keys(artifactSystem.artifacts).length} Artifacts` : hasContent ? "Components Active" : "Ready"}
               </div>
             </div>
 
             {/* Workspace content area */}
             <div className="relative p-6 md:p-8 min-h-[340px]">
-              {!hasMessages ? (
+              {!hasContent ? (
                 // Empty state
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                   {/* Animated rings */}
@@ -302,31 +366,23 @@ export default function Home() {
                   </p>
                 </div>
               ) : (
-                // Tambo-rendered messages
+                // Render artifacts and messages
                 <div className="space-y-6 animate-fade-in-up">
-                  {messages.map((message) => (
-                    <div key={message.id} className="space-y-4">
-                      {message.role === "user" && (
-                        <div className="flex items-center gap-2 text-sm text-zinc-400">
-                          <span className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center text-xs">
-                            ⚡
-                          </span>
-                          <span>{getMessageText(message.content)}</span>
-                        </div>
-                      )}
-                      {message.role === "assistant" && (
-                        <div className="pl-8">
-                          <TamboMessageProvider message={message}>
-                            <MessageComponent />
-                            {/* Show text content if no component */}
-                            {message.content && !message.renderedComponent && (
-                              <div className="text-zinc-300 text-sm whitespace-pre-wrap">
-                                {getMessageText(message.content)}
-                              </div>
-                            )}
-                          </TamboMessageProvider>
-                        </div>
-                      )}
+                  {/* Artifact Canvas - shows persisted artifacts */}
+                  <ArtifactCanvas />
+
+                  {/* Current message stream (for streaming responses) */}
+                  {messages.filter(m => m.role === 'assistant' && !processedMessageIds.current.has(m.id)).map((message) => (
+                    <div key={message.id} className="pl-0">
+                      <TamboMessageProvider message={message}>
+                        <MessageComponent />
+                        {/* Show text content if no component */}
+                        {message.content && !message.renderedComponent && (
+                          <div className="text-zinc-300 text-sm whitespace-pre-wrap">
+                            {getMessageText(message.content)}
+                          </div>
+                        )}
+                      </TamboMessageProvider>
                     </div>
                   ))}
 
@@ -354,7 +410,11 @@ export default function Home() {
             <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
               Enter
             </kbd>{" "}
-            to generate
+            to generate • Try{" "}
+            <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
+              remove item 3
+            </kbd>{" "}
+            to mutate
           </p>
         </div>
       </main>
