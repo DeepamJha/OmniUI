@@ -341,13 +341,13 @@ export function ArtifactRenderer({ artifactId, onAction }: { artifactId: string;
  * Renders artifact content based on type
  */
 function ArtifactContent({ artifact }: { artifact: Artifact }) {
-    const { type, state } = artifact;
+    const { type, state, id } = artifact;
 
     switch (type) {
         case 'CommandResultPanel':
             return <CommandResultContent state={state} />;
         case 'ExecutionPlan':
-            return <ExecutionPlanContent state={state} />;
+            return <ExecutionPlanContent state={state} artifactId={id} />;
         case 'SystemStatusPanel':
             return <SystemStatusContent state={state} />;
         default:
@@ -391,9 +391,84 @@ function CommandResultContent({ state }: { state: any }) {
 }
 
 /**
- * Execution Plan rendering
+ * Execution Plan rendering with INLINE EDITING support
  */
-function ExecutionPlanContent({ state }: { state: any }) {
+function ExecutionPlanContent({ state, artifactId, onEdit }: {
+    state: any;
+    artifactId?: string;
+    onEdit?: (newState: any) => void;
+}) {
+    const [editingStep, setEditingStep] = useState<number | null>(null);
+    const [editValue, setEditValue] = useState('');
+    const updateArtifact = useArtifactStore((state) => state.updateArtifact);
+    const addMutation = useArtifactStore((state) => state.addMutation);
+
+    const handleStepClick = (index: number, currentValue: string) => {
+        setEditingStep(index);
+        setEditValue(currentValue);
+    };
+
+    const handleStepSave = (index: number) => {
+        if (!artifactId) return;
+
+        const newSteps = [...(state.steps || [])];
+        const oldValue = newSteps[index]?.action || newSteps[index]?.title;
+
+        if (newSteps[index]) {
+            newSteps[index] = {
+                ...newSteps[index],
+                action: editValue,
+            };
+        }
+
+        const newState = { ...state, steps: newSteps };
+        updateArtifact(artifactId, newState);
+
+        // Record mutation
+        addMutation({
+            artifactId,
+            operation: 'update_item',
+            path: ['steps', index.toString()],
+            value: editValue,
+            previousValue: oldValue,
+            source: 'user',
+            reason: `Edited step ${index + 1}`,
+        });
+
+        setEditingStep(null);
+        console.log(`✏️ Inline edit: step ${index + 1} updated`);
+    };
+
+    const handleDeleteStep = (index: number) => {
+        if (!artifactId) return;
+
+        const oldStep = state.steps[index];
+        const newSteps = state.steps.filter((_: any, i: number) => i !== index);
+        const newState = { ...state, steps: newSteps };
+
+        updateArtifact(artifactId, newState);
+        addMutation({
+            artifactId,
+            operation: 'remove_item',
+            path: ['steps'],
+            value: index,
+            previousValue: oldStep,
+            source: 'user',
+            reason: `Removed step ${index + 1}`,
+        });
+
+        console.log(`🗑️ Inline delete: step ${index + 1} removed`);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleStepSave(index);
+        } else if (e.key === 'Escape') {
+            setEditingStep(null);
+        }
+    };
+
     return (
         <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm">
             {state.title && (
@@ -407,12 +482,30 @@ function ExecutionPlanContent({ state }: { state: any }) {
             {state.steps && state.steps.length > 0 && (
                 <div className="space-y-4">
                     {state.steps.map((step: any, i: number) => (
-                        <div key={i} className="flex gap-4">
+                        <div key={i} className="flex gap-4 group/step">
                             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
                                 <span className="text-sm font-semibold text-blue-400">{i + 1}</span>
                             </div>
-                            <div className="flex-1">
-                                <h4 className="text-white font-medium mb-1">{step.action || step.title}</h4>
+                            <div className="flex-1 min-w-0">
+                                {editingStep === i ? (
+                                    <input
+                                        type="text"
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onBlur={() => handleStepSave(i)}
+                                        onKeyDown={(e) => handleKeyDown(e, i)}
+                                        className="w-full bg-white/5 border border-blue-500/30 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-blue-500"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <h4
+                                        className={`text-white font-medium mb-1 ${artifactId ? 'cursor-pointer hover:bg-white/5 rounded px-2 py-1 -mx-2 transition-colors' : ''}`}
+                                        onClick={() => artifactId && handleStepClick(i, step.action || step.title)}
+                                        title={artifactId ? "Click to edit" : undefined}
+                                    >
+                                        {step.action || step.title}
+                                    </h4>
+                                )}
                                 {step.description && (
                                     <p className="text-sm text-gray-500">{step.description}</p>
                                 )}
@@ -422,9 +515,28 @@ function ExecutionPlanContent({ state }: { state: any }) {
                                     </span>
                                 )}
                             </div>
+                            {/* Delete button - shown on hover */}
+                            {artifactId && (
+                                <button
+                                    onClick={() => handleDeleteStep(i)}
+                                    className="opacity-0 group-hover/step:opacity-100 text-gray-600 hover:text-red-400 transition-all"
+                                    title="Remove step"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            )}
                         </div>
                     ))}
                 </div>
+            )}
+
+            {/* Inline edit hint */}
+            {artifactId && state.steps && state.steps.length > 0 && (
+                <p className="text-xs text-gray-600 mt-4 text-center">
+                    💡 Click any step to edit inline • No prompting required
+                </p>
             )}
         </div>
     );
