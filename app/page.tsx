@@ -29,39 +29,49 @@ function getMessageText(content: unknown): string {
 
 // Component to render a single message's component AND capture as artifact
 function MessageComponent({
-  onCaptureArtifact
+  onCaptureArtifact,
+  onTextFallback
 }: {
-  onCaptureArtifact?: (messageId: string, component: React.ReactNode, componentName: string, props: any) => void
+  onCaptureArtifact?: (messageId: string, component: React.ReactNode, componentName: string, props: any) => void;
+  onTextFallback?: (text: string) => void;
 }) {
   const message = useTamboCurrentMessage();
   const capturedRef = useRef<Set<string>>(new Set());
 
-  // Capture when renderedComponent becomes available
+  // Capture when renderedComponent becomes available OR text is finalized
   useEffect(() => {
-    if (!message?.renderedComponent || !message?.id) return;
+    if (!message?.id) return;
     if (capturedRef.current.has(message.id)) return;
 
-    console.log('🎯 MessageComponent captured renderedComponent:', message.id);
+    // If we have a rendered component, capture it
+    if (message.renderedComponent) {
+      console.log('🎯 MessageComponent captured renderedComponent:', message.id);
 
-    const componentType = (message.renderedComponent as any)?.type;
-    const componentName =
-      (message as any).componentName ||
-      componentType?.displayName ||
-      componentType?.name ||
-      (typeof componentType === 'string' ? componentType : null) ||
-      'CommandResultPanel';
+      const componentType = (message.renderedComponent as any)?.type;
+      const componentName =
+        (message as any).componentName ||
+        componentType?.displayName ||
+        componentType?.name ||
+        (typeof componentType === 'string' ? componentType : null) ||
+        'CommandResultPanel';
 
-    const props = (message.renderedComponent as any)?.props || {};
+      const props = (message.renderedComponent as any)?.props || {};
 
-    capturedRef.current.add(message.id);
-    onCaptureArtifact?.(message.id, message.renderedComponent, componentName, props);
-  }, [message?.renderedComponent, message?.id, onCaptureArtifact]);
+      capturedRef.current.add(message.id);
+      onCaptureArtifact?.(message.id, message.renderedComponent, componentName, props);
+    }
+    // If no component but we have text content, use fallback
+    else {
+      const textContent = getMessageText(message.content);
+      if (textContent && textContent.trim().length > 0) {
+        console.log('💬 MessageComponent using text fallback:', message.id);
+        capturedRef.current.add(message.id);
+        onTextFallback?.(textContent);
+      }
+    }
+  }, [message?.renderedComponent, message?.content, message?.id, onCaptureArtifact, onTextFallback]);
 
-  // The message has renderedComponent which is the actual React element
-  if (message?.renderedComponent) {
-    return message.renderedComponent;
-  }
-
+  // Hidden - we don't render anything, just capture
   return null;
 }
 
@@ -109,9 +119,34 @@ export default function Home() {
       processedMessageIds.current.add(messageId);
     } else {
       console.warn('⚠️ No schema found for component:', componentName);
-      // Still mark as processed to avoid spam
       processedMessageIds.current.add(messageId);
     }
+  }, [artifactSystem]);
+
+  // Create fallback artifact for plain text AI responses (FIX: All AI output = artifact)
+  const handleTextResponse = useCallback((messageId: string, textContent: string) => {
+    if (processedMessageIds.current.has(messageId)) return;
+    if (!textContent || textContent.trim().length === 0) return;
+
+    console.log('💬 Creating TextResponse artifact for plain text');
+
+    // Create a CommandResultPanel artifact for text responses
+    const artifactId = artifactSystem.createArtifact(
+      'CommandResultPanel',
+      {
+        title: 'AI Response',
+        status: 'success',
+        summary: textContent.slice(0, 200) + (textContent.length > 200 ? '...' : ''),
+        items: textContent.length > 200
+          ? textContent.slice(200).split('\n').filter(line => line.trim()).slice(0, 5)
+          : [],
+      },
+      null,
+      'AI Response'
+    );
+
+    console.log('✅ Created text artifact:', artifactId);
+    processedMessageIds.current.add(messageId);
   }, [artifactSystem]);
 
   const demoPrompts = [
@@ -387,30 +422,26 @@ export default function Home() {
                   </p>
                 </div>
               ) : (
-                // Render artifacts and messages
+                // ✅ FIX: Artifact Canvas is the ONLY output - no assistant text rendering
                 <div className="space-y-6 animate-fade-in-up">
-                  {/* Artifact Canvas - shows persisted artifacts with action support */}
+                  {/* Artifact Canvas - THE SOLE OUTPUT CHANNEL */}
                   <ArtifactCanvas onAction={(prompt) => {
                     setTaskInput(prompt);
-                    // Optionally auto-send
-                    // handleGenerate();
                   }} />
 
-                  {/* Current message stream (for streaming responses) */}
-                  {messages.filter(m => m.role === 'assistant' && !processedMessageIds.current.has(m.id)).map((message) => (
-                    <div key={message.id} className="pl-0">
-                      <TamboMessageProvider message={message}>
-                        <MessageComponent onCaptureArtifact={handleCaptureArtifact} />
-                        {/* Show text content if no component */}
-                        {message.content && !message.renderedComponent && (
-                          <div className="text-zinc-300 text-sm whitespace-pre-wrap">
-                            {getMessageText(message.content)}
-                          </div>
-                        )}
+                  {/* Hidden component capture - only for extracting renderedComponent, NOT for display */}
+                  <div className="hidden">
+                    {messages.filter(m => m.role === 'assistant' && !processedMessageIds.current.has(m.id)).map((message) => (
+                      <TamboMessageProvider key={message.id} message={message}>
+                        <MessageComponent
+                          onCaptureArtifact={handleCaptureArtifact}
+                          onTextFallback={(text) => handleTextResponse(message.id, text)}
+                        />
                       </TamboMessageProvider>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
 
+                  {/* Loading indicator only */}
                   {isGenerating && (
                     <div className="flex items-center gap-3 text-zinc-400">
                       <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center animate-pulse">
