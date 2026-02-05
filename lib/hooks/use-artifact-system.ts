@@ -1,100 +1,220 @@
-// Main hook for using the artifact system
+'use client';
 
-import { useCallback, useMemo } from 'react';
-import { ZodSchema } from 'zod';
+import { useCallback } from 'react';
 import { useArtifactStore } from '../artifacts/store';
-import { detectMutation, applyMutation, isMutationRequest, MutationIntent } from '../artifacts/mutation-handler';
-import type { Artifact, MutationResult } from '../artifacts/types';
+import type { Artifact, Mutation, Relationship } from '../artifacts/types';
+import { resolveReference } from '../artifacts/reference-resolver';
+import { detectMutation, applyMutation, validateMutation } from '../artifacts/mutation-handler';
+import { v4 as uuidv4 } from 'uuid';
 
-export interface UseArtifactSystemReturn {
-    // State
-    artifacts: Record<string, Artifact>;
+/**
+ * Build context string for AI prompts
+ */
+function buildArtifactContext(artifacts: Record<string, Artifact>): string {
+    const artifactList = Object.values(artifacts);
 
-    // Actions
-    createArtifact: <T>(type: string, state: T, schema: ZodSchema<T>, title?: string) => Artifact<T>;
-    updateArtifact: <T>(id: string, updates: Partial<T>) => MutationResult;
-    deleteArtifact: (id: string) => void;
-    getArtifact: (id: string) => Artifact | undefined;
+    if (artifactList.length === 0) {
+        return 'No artifacts exist yet in this conversation.';
+    }
 
-    // Mutation handling
-    processMessage: (message: string) => {
-        isMutation: boolean;
-        artifactId?: string;
-        intent?: MutationIntent;
-    };
-    executeMutation: (artifactId: string, intent: MutationIntent, originalMessage: string) => MutationResult;
-    undoLastMutation: (artifactId: string) => MutationResult;
+    const sorted = artifactList.sort((a, b) => b.createdAt - a.createdAt);
 
-    // Context
-    getContextString: () => string;
-    getMutations: (artifactId: string) => any[];
-    getRelated: (artifactId: string) => Artifact[];
+    return `
+Current artifacts in workspace:
+${sorted.map(a => {
+        const title = a.title || (a.state as any).title || 'Untitled';
+        const time = new Date(a.createdAt).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+        return `- ${a.id}: ${a.type} "${title}" (created ${time})`;
+    }).join('\n')}
+
+When referencing artifacts:
+- Use exact IDs when possible (e.g., "${sorted[0]?.id || 'abc12345'}")
+- For mutations, ALWAYS specify the artifact_id from the list above
+- Never invent artifact IDs that don't exist
+`.trim();
 }
 
-export function useArtifactSystem(): UseArtifactSystemReturn {
+/**
+ * Detect if user message references an artifact
+ */
+function detectArtifactReference(
+    message: string,
+    artifacts: Record<string, Artifact>
+): string | null {
+    const patterns = [
+        /\b(that|this|the)\s+(roadmap|plan|checklist|list|analysis|status|result)/i,
+        /\b(it|that|this)\b/i,
+        /#[a-f0-9]{8}/i,
+        /artifact\s+[a-f0-9]{8}/i,
+    ];
+
+    for (const pattern of patterns) {
+        const match = message.match(pattern);
+        if (match) {
+            return resolveReference(match[0], artifacts);
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Main hook for artifact system
+ * Provides all artifact operations and context
+ */
+export function useArtifactSystem() {
     const store = useArtifactStore();
 
-    const processMessage = useCallback((message: string) => {
-        // Check if this looks like a mutation
-        if (!isMutationRequest(message)) {
-            return { isMutation: false };
-        }
-
-        // Try to detect mutation intent
-        const intent = detectMutation(message, store.artifacts);
-        if (!intent) {
-            return { isMutation: false };
-        }
-
-        return {
-            isMutation: true,
-            artifactId: intent.artifactId,
-            intent,
-        };
+    // Get context string for AI prompts
+    const getContextString = useCallback(() => {
+        return buildArtifactContext(store.artifacts);
     }, [store.artifacts]);
 
-    const executeMutation = useCallback((
-        artifactId: string,
-        intent: MutationIntent,
-        _originalMessage: string
-    ): MutationResult => {
-        const artifact = store.artifacts[artifactId];
-        if (!artifact) {
-            return { success: false, error: `Artifact ${artifactId} not found` };
-        }
+    // Create new artifact from AI response
+    const createArtifact = useCallback((
+        type: string,
+        state: any,
+        schema: any,
+        title?: string
+    ): string => {
+        const artifact: Artifact = {
+            id: uuidv4().split('-')[0], // 8-char ID
+            type,
+            state,
+            schema,
+            title,
+            version: 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
 
-        // Apply the mutation (validation is built-in)
-        const result = applyMutation(artifact, intent, 'user');
-
-        if (result.success && result.newState) {
-            // Update the store
-            store.updateArtifact(artifactId, result.newState);
-
-            // Record the mutation
-            if (result.mutation) {
-                store.addMutation({
-                    ...result.mutation,
-                    artifactId,
-                });
-            }
-
-            return { success: true, newState: result.newState };
-        }
-
-        return result;
+        store.createArtifact(type, state, schema, title);
+        return artifact.id;
     }, [store]);
 
-    return useMemo(() => ({
+    // Process user message for mutations
+    const processMessage = useCallback((message: string): {
+        isMutation: boolean;
+        artifactId?: string;
+        intent?: any;
+    } => {
+        // First, detect if message references an artifact
+        const artifactId = detectArtifactReference(message, store.artifacts);
+
+        if (!artifactId) {
+            return { isMutation: false };
+        }
+
+        // Check if it's a mutation request
+        const mutationIntent = detectMutation(message, store.artifacts);
+
+        if (mutationIntent) {
+            return {
+                isMutation: true,
+                artifactId,
+                intent: mutationIntent,
+            };
+        }
+
+        return { isMutation: false, artifactId };
+    }, [store.artifacts]);
+
+    // Execute mutation
+    const executeMutation = useCallback((
+        artifactId: string,
+        intent: any,
+        reason?: string
+    ): { success: boolean; error?: string } => {
+        const artifact = store.getArtifact(artifactId);
+        if (!artifact) {
+            return { success: false, error: 'Artifact not found' };
+        }
+
+        // Validate
+        const validation = validateMutation(artifact, intent);
+        if (!validation.valid) {
+            return { success: false, error: validation.error };
+        }
+
+        // Apply mutation
+        const result = applyMutation(artifact, intent, 'user');
+
+        if (!result.success) {
+            return { success: false, error: result.error };
+        }
+
+        // Update store
+        if (result.newState) {
+            store.updateArtifact(artifactId, result.newState);
+        }
+        if (result.mutation) {
+            store.addMutation(result.mutation);
+        }
+
+        return { success: true };
+    }, [store]);
+
+    // Create relationship between artifacts
+    const createRelationship = useCallback((
+        sourceId: string,
+        targetId: string,
+        type: 'references' | 'depends_on' | 'conflicts_with' | 'derived_from' | 'similar_to',
+        _metadata?: Record<string, any>
+    ): string => {
+        const relationship = store.addRelationship(sourceId, targetId, type);
+        return relationship.id;
+    }, [store]);
+
+    return {
+        // State
         artifacts: store.artifacts,
-        createArtifact: store.createArtifact,
+        mutations: store.mutations,
+        relationships: store.relationships,
+
+        // Operations
+        createArtifact,
         updateArtifact: store.updateArtifact,
         deleteArtifact: store.deleteArtifact,
         getArtifact: store.getArtifact,
-        processMessage,
+
+        // Mutations
         executeMutation,
         undoLastMutation: store.undoLastMutation,
-        getContextString: store.getContextString,
         getMutations: store.getMutations,
+
+        // Relationships
+        createRelationship,
         getRelated: store.getRelated,
-    }), [store, processMessage, executeMutation]);
+
+        // Context & Processing
+        getContextString,
+        processMessage,
+        resolveReference: (ref: string) => resolveReference(ref, store.artifacts),
+    };
+}
+
+/**
+ * Context helper for Tambo AI
+ * Automatically provides artifact context to all AI requests
+ */
+export function useArtifactContextHelper() {
+    const { getContextString, artifacts } = useArtifactSystem();
+
+    // This should be used with Tambo's context helpers
+    // Returns context object that Tambo includes in prompts
+    return useCallback(() => {
+        const artifactList = Object.values(artifacts);
+
+        return {
+            artifacts: {
+                count: artifactList.length,
+                context: getContextString(),
+                ids: artifactList.map(a => a.id),
+                types: [...new Set(artifactList.map(a => a.type))],
+            },
+        };
+    }, [artifacts, getContextString]);
 }
