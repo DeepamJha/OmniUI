@@ -19,13 +19,13 @@ import {
 import '@xyflow/react/dist/style.css';
 import { z } from 'zod';
 
-// Schema for the component props
+// Schema for the component props - all fields have defaults for AI flexibility
 export const interactiveFlowchartSchema = z.object({
     title: z.string().default('Process Flow').describe('Title of the flowchart'),
     nodes: z.array(
         z.object({
-            id: z.string().describe('Unique node ID'),
-            label: z.string().describe('Display label for the node'),
+            id: z.string().default(() => `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`).describe('Unique node ID'),
+            label: z.string().default('Step').describe('Display label for the node'),
             type: z.string().default('process').describe('Node type: start, process, decision, end, or custom'),
             description: z.string().optional().describe('Detailed description shown on click'),
             status: z.string().default('pending').describe('Node status: pending, active, completed, error'),
@@ -33,8 +33,8 @@ export const interactiveFlowchartSchema = z.object({
     ).default([]).describe('List of nodes in the flowchart'),
     edges: z.array(
         z.object({
-            source: z.string().describe('Source node ID'),
-            target: z.string().describe('Target node ID'),
+            source: z.string().default('').describe('Source node ID'),
+            target: z.string().default('').describe('Target node ID'),
             label: z.string().optional().describe('Edge label (e.g., Yes/No for decisions)'),
         })
     ).default([]).describe('Connections between nodes'),
