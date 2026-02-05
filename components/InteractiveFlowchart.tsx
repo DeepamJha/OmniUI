@@ -19,25 +19,27 @@ import {
 import '@xyflow/react/dist/style.css';
 import { z } from 'zod';
 
-// Schema for the component props - all fields have defaults for AI flexibility
+// Schema for the component props - handles null/undefined from AI
+const safeString = (defaultVal: string) => z.string().nullish().transform(val => val ?? defaultVal);
+
 export const interactiveFlowchartSchema = z.object({
-    title: z.string().default('Process Flow').describe('Title of the flowchart'),
+    title: safeString('Process Flow').describe('Title of the flowchart'),
     nodes: z.array(
         z.object({
-            id: z.string().default(() => `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`).describe('Unique node ID'),
-            label: z.string().default('Step').describe('Display label for the node'),
-            type: z.string().default('process').describe('Node type: start, process, decision, end, or custom'),
-            description: z.string().optional().describe('Detailed description shown on click'),
-            status: z.string().default('pending').describe('Node status: pending, active, completed, error'),
+            id: safeString(`node-${Date.now()}`).describe('Unique node ID'),
+            label: safeString('Step').describe('Display label for the node'),
+            type: safeString('process').describe('Node type: start, process, decision, end, or custom'),
+            description: z.string().nullish().describe('Detailed description shown on click'),
+            status: safeString('pending').describe('Node status: pending, active, completed, error'),
         })
-    ).default([]).describe('List of nodes in the flowchart'),
+    ).nullish().transform(val => val ?? []).describe('List of nodes in the flowchart'),
     edges: z.array(
         z.object({
-            source: z.string().default('').describe('Source node ID'),
-            target: z.string().default('').describe('Target node ID'),
-            label: z.string().optional().describe('Edge label (e.g., Yes/No for decisions)'),
+            source: safeString('').describe('Source node ID'),
+            target: safeString('').describe('Target node ID'),
+            label: z.string().nullish().describe('Edge label (e.g., Yes/No for decisions)'),
         })
-    ).default([]).describe('Connections between nodes'),
+    ).nullish().transform(val => val ?? []).describe('Connections between nodes'),
 });
 
 export type InteractiveFlowchartProps = z.infer<typeof interactiveFlowchartSchema>;
