@@ -178,33 +178,30 @@ function MutationHistoryItem({ mutation, isLatest }: { mutation: Mutation; isLat
  * Related Artifacts Section
  */
 function RelatedArtifacts({ artifactId }: { artifactId: string }) {
-    // ✅ Select raw state only
+    // 1️⃣ Always read raw store state first
     const allRelationships = useArtifactStore((state) => state.relationships);
     const artifacts = useArtifactStore((state) => state.artifacts);
 
-    // ✅ Derive data with useMemo
-    const relationships = useMemo(() => {
-        return allRelationships.filter(
+    // 2️⃣ Always call hooks (NO early returns above this)
+    const relatedArtifacts = useMemo(() => {
+        const relationships = allRelationships.filter(
             (r) => r.sourceId === artifactId || r.targetId === artifactId
         );
-    }, [allRelationships, artifactId]);
 
-    if (relationships.length === 0) return null;
+        if (relationships.length === 0) return [];
 
-    const relatedArtifacts = useMemo(() => {
         return relationships
-            .map((r) =>
-                r.sourceId === artifactId
+            .map((r) => ({
+                relationship: r,
+                artifact: r.sourceId === artifactId
                     ? artifacts[r.targetId]
                     : artifacts[r.sourceId]
-            )
-            .filter(Boolean);
-    }, [relationships, artifacts, artifactId]);
+            }))
+            .filter((item) => item.artifact);
+    }, [allRelationships, artifacts, artifactId]);
 
+    // 3️⃣ Conditional return AFTER hooks
     if (relatedArtifacts.length === 0) return null;
-
-    const getRelatedId = (rel: typeof relationships[0]) =>
-        rel.sourceId === artifactId ? rel.targetId : rel.sourceId;
 
     const typeLabels: Record<string, string> = {
         'references': '🔗',
@@ -218,23 +215,17 @@ function RelatedArtifacts({ artifactId }: { artifactId: string }) {
         <div className="mt-4 pt-4 border-t border-white/5">
             <p className="text-xs text-gray-500 mb-2">Related Artifacts</p>
             <div className="flex flex-wrap gap-2">
-                {relationships.map(rel => {
-                    const relatedId = getRelatedId(rel);
-                    const relatedArtifact = artifacts[relatedId];
-                    if (!relatedArtifact) return null;
-
-                    return (
-                        <a
-                            key={rel.id}
-                            href={`#artifact-${relatedId}`}
-                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 hover:border-indigo-500/30 transition-colors text-xs"
-                        >
-                            <span>{typeLabels[rel.type] || '🔗'}</span>
-                            <span className="text-blue-400 font-mono">#{relatedId}</span>
-                            <span className="text-gray-500">{relatedArtifact.type}</span>
-                        </a>
-                    );
-                })}
+                {relatedArtifacts.map(({ relationship, artifact }) => (
+                    <a
+                        key={relationship.id}
+                        href={`#artifact-${artifact.id}`}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 hover:border-indigo-500/30 transition-colors text-xs"
+                    >
+                        <span>{typeLabels[relationship.type] || '🔗'}</span>
+                        <span className="text-blue-400 font-mono">#{artifact.id}</span>
+                        <span className="text-gray-500">{artifact.type}</span>
+                    </a>
+                ))}
             </div>
         </div>
     );
