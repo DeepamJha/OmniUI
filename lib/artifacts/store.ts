@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import type { Artifact, Mutation, Relationship, SerializableArtifact, MutationResult, MutationIntent } from './types';
+import type { Artifact, Mutation, Relationship, SerializableArtifact, MutationResult } from './types';
 import { ZodSchema } from 'zod';
 
 // Generate short ID from UUID
@@ -81,10 +81,12 @@ export const useArtifactStore = create<ArtifactStore>()(
 
                 const newState = { ...artifact.state, ...updates };
 
-                // Validate with schema
-                const result = artifact.schema.safeParse(newState);
-                if (!result.success) {
-                    return { success: false, error: result.error.message };
+                // Validate with schema if available
+                if (artifact.schema) {
+                    const result = artifact.schema.safeParse(newState);
+                    if (!result.success) {
+                        return { success: false, error: result.error.message };
+                    }
                 }
 
                 const mutation = get().addMutation({

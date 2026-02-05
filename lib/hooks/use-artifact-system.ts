@@ -4,7 +4,6 @@ import { useCallback, useMemo } from 'react';
 import { ZodSchema } from 'zod';
 import { useArtifactStore } from '../artifacts/store';
 import { parseMutationIntent, applyMutation, isMutationRequest } from '../artifacts/mutation-handler';
-import { resolveReference, hasArtifactReference } from '../artifacts/reference-resolver';
 import type { Artifact, MutationIntent, MutationResult } from '../artifacts/types';
 
 export interface UseArtifactSystemReturn {

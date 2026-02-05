@@ -77,13 +77,13 @@ export default function Home() {
         const componentConfig = components.find((c) => c.name === componentName);
         if (componentConfig && componentConfig.propsSchema) {
           // Extract props from the rendered component
-          const props = (message.renderedComponent as any)?.props || message.renderedComponent;
+          const props = (message.renderedComponent as any)?.props || {};
 
-          // Create artifact
+          // Create artifact with schema
           artifactSystem.createArtifact(
             componentName,
             { ...props, messageId: message.id },
-            componentConfig.propsSchema as any, // Cast to any for Zod compatibility
+            componentConfig.propsSchema as any,
             props?.title || componentName
           );
 
