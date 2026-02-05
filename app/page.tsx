@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTamboThread, TamboMessageProvider, useTamboCurrentMessage } from "@tambo-ai/react";
 import { cn } from "@/lib/utils";
 import { useArtifactSystem } from "@/lib/hooks/use-artifact-system";
@@ -27,9 +27,35 @@ function getMessageText(content: unknown): string {
   return "";
 }
 
-// Component to render a single message's component
-function MessageComponent() {
+// Component to render a single message's component AND capture as artifact
+function MessageComponent({
+  onCaptureArtifact
+}: {
+  onCaptureArtifact?: (messageId: string, component: React.ReactNode, componentName: string, props: any) => void
+}) {
   const message = useTamboCurrentMessage();
+  const capturedRef = useRef<Set<string>>(new Set());
+
+  // Capture when renderedComponent becomes available
+  useEffect(() => {
+    if (!message?.renderedComponent || !message?.id) return;
+    if (capturedRef.current.has(message.id)) return;
+
+    console.log('🎯 MessageComponent captured renderedComponent:', message.id);
+
+    const componentType = (message.renderedComponent as any)?.type;
+    const componentName =
+      (message as any).componentName ||
+      componentType?.displayName ||
+      componentType?.name ||
+      (typeof componentType === 'string' ? componentType : null) ||
+      'CommandResultPanel';
+
+    const props = (message.renderedComponent as any)?.props || {};
+
+    capturedRef.current.add(message.id);
+    onCaptureArtifact?.(message.id, message.renderedComponent, componentName, props);
+  }, [message?.renderedComponent, message?.id, onCaptureArtifact]);
 
   // The message has renderedComponent which is the actual React element
   if (message?.renderedComponent) {
@@ -58,59 +84,35 @@ export default function Home() {
     setMounted(true);
   }, []);
 
-  // Effect to capture AI-generated components and convert to artifacts
-  useEffect(() => {
-    if (!thread?.messages) return;
+  // Callback to capture components when MessageComponent renders them
+  const handleCaptureArtifact = useCallback((
+    messageId: string,
+    component: React.ReactNode,
+    componentName: string,
+    props: any
+  ) => {
+    if (processedMessageIds.current.has(messageId)) return;
 
-    thread.messages.forEach((message) => {
-      // Skip if already processed or not assistant message
-      if (message.role !== 'assistant' || processedMessageIds.current.has(message.id)) return;
+    console.log('🎯 Capturing artifact from MessageComponent:', componentName, props);
 
-      // Debug: Log all assistant messages
-      console.log('📩 Processing message:', message.id, message);
+    // Find the schema for this component from our registry
+    const componentConfig = components.find((c) => c.name === componentName);
 
-      // If AI generated a component, create an artifact
-      if (message.renderedComponent) {
-        console.log('🧩 Found renderedComponent:', message.renderedComponent);
-
-        // Extract component type - try multiple methods
-        const componentType = message.renderedComponent?.type as any;
-        const componentName =
-          (message as any).componentName ||  // Direct from message
-          componentType?.displayName ||       // React displayName
-          componentType?.name ||              // Function name
-          (typeof componentType === 'string' ? componentType : null) || // String type
-          'CommandResultPanel';               // Fallback
-
-        console.log('📋 Detected component:', componentName);
-
-        // Extract props from the React element
-        const props = (message.renderedComponent as any)?.props || {};
-        console.log('📦 Extracted props:', props);
-
-        // Find the schema for this component from our registry
-        const componentConfig = components.find((c) => c.name === componentName);
-
-        if (componentConfig && componentConfig.propsSchema) {
-          // Create artifact with the extracted props
-          const artifactId = artifactSystem.createArtifact(
-            componentName,
-            props,
-            componentConfig.propsSchema as any,
-            props?.title || props?.systemName || componentName
-          );
-
-          console.log('✅ Created artifact:', artifactId);
-          processedMessageIds.current.add(message.id);
-        } else {
-          console.warn('⚠️ No schema found for component:', componentName);
-          console.log('Available components:', components.map(c => c.name));
-        }
-      } else {
-        console.log('💬 Message has no renderedComponent', message.content);
-      }
-    });
-  }, [thread?.messages, artifactSystem]);
+    if (componentConfig && componentConfig.propsSchema) {
+      const artifactId = artifactSystem.createArtifact(
+        componentName,
+        props,
+        componentConfig.propsSchema as any,
+        props?.title || props?.systemName || componentName
+      );
+      console.log('✅ Created artifact:', artifactId);
+      processedMessageIds.current.add(messageId);
+    } else {
+      console.warn('⚠️ No schema found for component:', componentName);
+      // Still mark as processed to avoid spam
+      processedMessageIds.current.add(messageId);
+    }
+  }, [artifactSystem]);
 
   const demoPrompts = [
     { label: "Analyze system health", icon: "📊" },
@@ -398,7 +400,7 @@ export default function Home() {
                   {messages.filter(m => m.role === 'assistant' && !processedMessageIds.current.has(m.id)).map((message) => (
                     <div key={message.id} className="pl-0">
                       <TamboMessageProvider message={message}>
-                        <MessageComponent />
+                        <MessageComponent onCaptureArtifact={handleCaptureArtifact} />
                         {/* Show text content if no component */}
                         {message.content && !message.renderedComponent && (
                           <div className="text-zinc-300 text-sm whitespace-pre-wrap">
