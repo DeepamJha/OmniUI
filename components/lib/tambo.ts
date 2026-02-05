@@ -13,6 +13,7 @@ import type { TamboComponent } from "@tambo-ai/react";
 import { CommandResultPanel } from "../CommandResultPanel";
 import { ExecutionPlan } from "../ExecutionPlan";
 import { SystemStatusPanel } from "../SystemStatusPanel";
+import { InteractiveFlowchart, interactiveFlowchartSchema } from "../InteractiveFlowchart";
 
 /**
  * OmniUI Component Registry
@@ -121,6 +122,29 @@ This shows real-time or current STATUS with metrics, not analysis.
                 })
             ).default([]).describe("3-6 key metrics"),
         }),
+    },
+
+    // FLOWCHART COMPONENT - for processes and workflows
+    {
+        name: "InteractiveFlowchart",
+        description: `
+Use when the user asks for:
+- Process flows or workflows
+- Decision trees or pipelines
+- Step-by-step procedures with branching
+- Visual diagram of a system or process
+- Deployment pipelines, CI/CD flows
+- State machines or transitions
+
+Do NOT use for:
+- Simple linear plans (use ExecutionPlan instead)
+- Status dashboards (use SystemStatusPanel)
+- Results or findings (use CommandResultPanel)
+
+This shows VISUAL diagrams with nodes and connections. Use when the user wants to SEE a process, not just read steps.
+`,
+        component: InteractiveFlowchart,
+        propsSchema: interactiveFlowchartSchema,
     },
 ];
 
