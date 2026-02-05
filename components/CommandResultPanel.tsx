@@ -6,42 +6,50 @@ export function CommandResultPanel({
     summary,
     items,
 }: {
-    title: string;
-    status: Status;
-    summary: string;
-    items: string[];
+    title?: string | null;
+    status?: string | null;
+    summary?: string | null;
+    items?: string[] | null;
 }) {
+    // Defensive: handle null/undefined props from AI
+    const safeTitle = title || "AI Response";
+    const safeStatus = (status === "warning" || status === "error") ? status : "success";
+    const safeSummary = summary || "";
+    const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+
     const statusColor =
-        status === "success"
+        safeStatus === "success"
             ? "border-green-500/30 bg-green-500/5"
-            : status === "warning"
+            : safeStatus === "warning"
                 ? "border-yellow-500/30 bg-yellow-500/5"
                 : "border-red-500/30 bg-red-500/5";
 
     const statusIcon =
-        status === "success" ? "✓" : status === "warning" ? "⚠" : "✕";
+        safeStatus === "success" ? "✓" : safeStatus === "warning" ? "⚠" : "✕";
 
     return (
         <div
             className={`rounded-2xl border ${statusColor} p-6 space-y-4 text-sm`}
         >
             <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-base text-white">{title}</h3>
-                <span className={`text-xs uppercase tracking-wide flex items-center gap-1.5 ${status === "success" ? "text-green-400" :
-                        status === "warning" ? "text-yellow-400" : "text-red-400"
+                <h3 className="font-semibold text-base text-white">{safeTitle}</h3>
+                <span className={`text-xs uppercase tracking-wide flex items-center gap-1.5 ${safeStatus === "success" ? "text-green-400" :
+                    safeStatus === "warning" ? "text-yellow-400" : "text-red-400"
                     }`}>
                     <span>{statusIcon}</span>
-                    {status}
+                    {safeStatus}
                 </span>
             </div>
 
-            <p className="text-gray-400">{summary}</p>
+            {safeSummary && <p className="text-gray-400">{safeSummary}</p>}
 
-            <ul className="list-disc list-inside space-y-1 text-gray-300">
-                {items.map((item, i) => (
-                    <li key={i}>{item}</li>
-                ))}
-            </ul>
+            {safeItems.length > 0 && (
+                <ul className="list-disc list-inside space-y-1 text-gray-300">
+                    {safeItems.map((item, i) => (
+                        <li key={i}>{item}</li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 }

@@ -77,7 +77,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <TamboProvider
             apiKey={process.env.NEXT_PUBLIC_TAMBO_API_KEY!}
-            {...(accessToken ? { userToken: accessToken } : {})}
             components={components}
             contextHelpers={{
                 // Prebuilt helpers
