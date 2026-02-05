@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useArtifactStore, useArtifactHydration } from '@/lib/artifacts/store';
 import type { Artifact, Mutation } from '@/lib/artifacts/types';
 
@@ -66,10 +66,14 @@ export function ArtifactCanvas({ onAction }: ArtifactCanvasProps = {}) {
  */
 function MutationHistoryDropdown({ artifactId, currentVersion }: { artifactId: string; currentVersion: number }) {
     const [isOpen, setIsOpen] = useState(false);
-    const mutations = useArtifactStore((state) =>
-        state.mutations.filter(m => m.artifactId === artifactId)
-    );
+    // Get all mutations once (stable reference)
+    const allMutations = useArtifactStore((state) => state.mutations);
     const undoLastMutation = useArtifactStore((state) => state.undoLastMutation);
+    // Filter with useMemo to avoid infinite loop
+    const mutations = useMemo(() =>
+        allMutations.filter(m => m.artifactId === artifactId),
+        [allMutations, artifactId]
+    );
 
     if (mutations.length === 0 && currentVersion === 1) return null;
 
