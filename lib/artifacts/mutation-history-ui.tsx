@@ -130,7 +130,7 @@ function MutationItem({
                     <p className="text-xs text-gray-400 truncate">{mutation.reason}</p>
                 )}
 
-                <span className="text-xs text-gray-600">
+                <span className="text-xs text-gray-600" suppressHydrationWarning>
                     {new Date(mutation.timestamp).toLocaleTimeString('en-US', {
                         hour: 'numeric',
                         minute: '2-digit',

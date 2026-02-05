@@ -157,7 +157,7 @@ function MutationHistoryItem({ mutation, isLatest }: { mutation: Mutation; isLat
                 <span className="text-xs font-medium text-white">
                     {formatOperation(mutation.operation)}
                 </span>
-                <span className="text-xs text-gray-600">
+                <span className="text-xs text-gray-600" suppressHydrationWarning>
                     {new Date(mutation.timestamp).toLocaleTimeString('en-US', {
                         hour: 'numeric',
                         minute: '2-digit',
@@ -331,7 +331,7 @@ export function ArtifactRenderer({ artifactId, onAction }: { artifactId: string;
 
                 <div className="flex items-center gap-3">
                     {/* Timestamp */}
-                    <span className="text-gray-600 text-xs">
+                    <span className="text-gray-600 text-xs" suppressHydrationWarning>
                         {new Date(artifact.updatedAt).toLocaleTimeString('en-US', {
                             hour: 'numeric',
                             minute: '2-digit',
