@@ -26,9 +26,9 @@ export const interactiveFlowchartSchema = z.object({
         z.object({
             id: z.string().describe('Unique node ID'),
             label: z.string().describe('Display label for the node'),
-            type: z.enum(['start', 'process', 'decision', 'end']).default('process').describe('Node type'),
+            type: z.string().default('process').describe('Node type: start, process, decision, end, or custom'),
             description: z.string().optional().describe('Detailed description shown on click'),
-            status: z.enum(['pending', 'active', 'completed', 'error']).default('pending').describe('Node status'),
+            status: z.string().default('pending').describe('Node status: pending, active, completed, error'),
         })
     ).default([]).describe('List of nodes in the flowchart'),
     edges: z.array(
