@@ -1,14 +1,68 @@
 'use client';
 
 import React from 'react';
-import { useArtifactStore } from '@/lib/artifacts/store';
+import { useArtifactStore, useArtifactHydration } from '@/lib/artifacts/store';
 import type { Artifact } from '@/lib/artifacts/types';
+
+/**
+ * Canvas with proper hydration and empty state handling
+ */
+export function ArtifactCanvas() {
+    const hasHydrated = useArtifactHydration();
+    const artifacts = useArtifactStore((state) => state.artifacts);
+
+    // Sort by creation time (oldest first)
+    const artifactIds = Object.keys(artifacts).sort((a, b) => {
+        return artifacts[a].createdAt - artifacts[b].createdAt;
+    });
+
+    // While hydrating, show loading
+    if (!hasHydrated) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-gray-500 text-sm">Loading workspace...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // After hydration, if no artifacts exist, show empty state
+    if (artifactIds.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-center max-w-md">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <p className="text-gray-400 text-lg mb-2">No artifacts yet</p>
+                    <p className="text-gray-600 text-sm">
+                        Describe a task to generate workspace components
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    // Render artifacts
+    return (
+        <div className="space-y-6">
+            {artifactIds.map(id => (
+                <ArtifactRenderer key={id} artifactId={id} />
+            ))}
+        </div>
+    );
+}
 
 /**
  * Renders a single artifact with header showing ID and type
  */
 export function ArtifactRenderer({ artifactId }: { artifactId: string }) {
     const artifact = useArtifactStore((state) => state.artifacts[artifactId]);
+    const deleteArtifact = useArtifactStore((state) => state.deleteArtifact);
 
     if (!artifact) {
         return (
@@ -22,14 +76,7 @@ export function ArtifactRenderer({ artifactId }: { artifactId: string }) {
     if (artifact.schema) {
         const validation = artifact.schema.safeParse(artifact.state);
         if (!validation.success) {
-            return (
-                <div className="border border-yellow-500/20 rounded-lg p-4 bg-yellow-500/5">
-                    <p className="text-yellow-400">Invalid artifact state</p>
-                    <pre className="text-xs mt-2 text-yellow-300/70">
-                        {JSON.stringify(validation.error.issues, null, 2)}
-                    </pre>
-                </div>
-            );
+            console.warn('Artifact validation warning:', validation.error.issues);
         }
     }
 
@@ -38,7 +85,7 @@ export function ArtifactRenderer({ artifactId }: { artifactId: string }) {
             {/* Artifact header */}
             <div className="flex items-center justify-between mb-3 text-sm">
                 <div className="flex items-center gap-2">
-                    <span className="text-blue-400 font-mono">#{artifactId}</span>
+                    <span className="text-blue-400 font-mono text-xs">#{artifactId}</span>
                     <span className="text-gray-500">•</span>
                     <span className="text-gray-400">{artifact.type}</span>
                     {artifact.version > 1 && (
@@ -49,13 +96,26 @@ export function ArtifactRenderer({ artifactId }: { artifactId: string }) {
                     )}
                 </div>
 
-                {/* Timestamp */}
-                <span className="text-gray-600 text-xs">
-                    {new Date(artifact.updatedAt).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                    })}
-                </span>
+                <div className="flex items-center gap-3">
+                    {/* Timestamp */}
+                    <span className="text-gray-600 text-xs">
+                        {new Date(artifact.updatedAt).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                        })}
+                    </span>
+
+                    {/* Delete button */}
+                    <button
+                        onClick={() => deleteArtifact(artifactId)}
+                        className="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Delete artifact"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {/* Artifact content */}
@@ -70,7 +130,6 @@ export function ArtifactRenderer({ artifactId }: { artifactId: string }) {
 function ArtifactContent({ artifact }: { artifact: Artifact }) {
     const { type, state } = artifact;
 
-    // Render based on type
     switch (type) {
         case 'CommandResultPanel':
             return <CommandResultContent state={state} />;
@@ -231,35 +290,9 @@ function SystemStatusContent({ state }: { state: any }) {
 function GenericContent({ state }: { state: any }) {
     return (
         <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm">
-            <pre className="text-sm text-gray-400 overflow-auto">
+            <pre className="text-sm text-gray-400 overflow-auto max-h-96">
                 {JSON.stringify(state, null, 2)}
             </pre>
-        </div>
-    );
-}
-
-/**
- * Canvas to display all artifacts
- */
-export function ArtifactCanvas() {
-    const artifacts = useArtifactStore((state) => state.artifacts);
-    const artifactIds = Object.keys(artifacts).sort((a, b) => {
-        return artifacts[a].createdAt - artifacts[b].createdAt;
-    });
-
-    if (artifactIds.length === 0) {
-        return (
-            <div className="flex items-center justify-center h-64 text-gray-600">
-                <p>No artifacts yet. Describe a task to generate workspace components.</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-6">
-            {artifactIds.map(id => (
-                <ArtifactRenderer key={id} artifactId={id} />
-            ))}
         </div>
     );
 }

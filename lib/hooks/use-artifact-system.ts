@@ -1,16 +1,20 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useArtifactStore } from '../artifacts/store';
-import type { Artifact, Mutation, Relationship } from '../artifacts/types';
+import { useArtifactStore, useArtifactHydration, ARTIFACT_SCHEMAS } from '../artifacts/store';
+import type { Artifact, Relationship } from '../artifacts/types';
 import { resolveReference } from '../artifacts/reference-resolver';
-import { detectMutation, applyMutation, validateMutation } from '../artifacts/mutation-handler';
+import { detectMutation, applyMutation, validateMutation, MutationIntent } from '../artifacts/mutation-handler';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Build context string for AI prompts
  */
-function buildArtifactContext(artifacts: Record<string, Artifact>): string {
+function buildArtifactContext(artifacts: Record<string, Artifact>, hasHydrated: boolean): string {
+    if (!hasHydrated) {
+        return 'Artifacts are being loaded from storage...';
+    }
+
     const artifactList = Object.values(artifacts);
 
     if (artifactList.length === 0) {
@@ -19,22 +23,17 @@ function buildArtifactContext(artifacts: Record<string, Artifact>): string {
 
     const sorted = artifactList.sort((a, b) => b.createdAt - a.createdAt);
 
-    return `
-Current artifacts in workspace:
+    return `Current artifacts in workspace:
 ${sorted.map(a => {
         const title = a.title || (a.state as any).title || 'Untitled';
         const time = new Date(a.createdAt).toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit'
         });
-        return `- ${a.id}: ${a.type} "${title}" (created ${time})`;
+        return `- ${a.id}: ${a.type} "${title}" (v${a.version}, created ${time})`;
     }).join('\n')}
 
-When referencing artifacts:
-- Use exact IDs when possible (e.g., "${sorted[0]?.id || 'abc12345'}")
-- For mutations, ALWAYS specify the artifact_id from the list above
-- Never invent artifact IDs that don't exist
-`.trim();
+When referencing artifacts, use exact IDs (e.g., "${sorted[0]?.id || 'abc12345'}").`;
 }
 
 /**
@@ -62,16 +61,16 @@ function detectArtifactReference(
 }
 
 /**
- * Main hook for artifact system
- * Provides all artifact operations and context
+ * Main hook for artifact system with hydration awareness
  */
 export function useArtifactSystem() {
     const store = useArtifactStore();
+    const hasHydrated = useArtifactHydration();
 
-    // Get context string for AI prompts
+    // Get context string for AI prompts (hydration-aware)
     const getContextString = useCallback(() => {
-        return buildArtifactContext(store.artifacts);
-    }, [store.artifacts]);
+        return buildArtifactContext(store.artifacts, hasHydrated);
+    }, [store.artifacts, hasHydrated]);
 
     // Create new artifact from AI response
     const createArtifact = useCallback((
@@ -80,28 +79,39 @@ export function useArtifactSystem() {
         schema: any,
         title?: string
     ): string => {
+        const id = uuidv4().split('-')[0];
+
+        // Use provided schema or look up from registry
+        const resolvedSchema = schema || ARTIFACT_SCHEMAS[type];
+
         const artifact: Artifact = {
-            id: uuidv4().split('-')[0], // 8-char ID
+            id,
             type,
             state,
-            schema,
+            schema: resolvedSchema,
             title,
             version: 1,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };
 
-        store.createArtifact(type, state, schema, title);
-        return artifact.id;
+        store.addArtifact(artifact);
+        console.log(`✅ Created artifact: ${id} (${type})`);
+
+        return id;
     }, [store]);
 
-    // Process user message for mutations
+    // Process user message for mutations (hydration-aware)
     const processMessage = useCallback((message: string): {
         isMutation: boolean;
         artifactId?: string;
-        intent?: any;
+        intent?: MutationIntent;
     } => {
-        // First, detect if message references an artifact
+        if (!hasHydrated) {
+            return { isMutation: false };
+        }
+
+        // Detect if message references an artifact
         const artifactId = detectArtifactReference(message, store.artifacts);
 
         if (!artifactId) {
@@ -112,6 +122,7 @@ export function useArtifactSystem() {
         const mutationIntent = detectMutation(message, store.artifacts);
 
         if (mutationIntent) {
+            console.log(`🔄 Detected mutation intent:`, mutationIntent);
             return {
                 isMutation: true,
                 artifactId,
@@ -120,12 +131,12 @@ export function useArtifactSystem() {
         }
 
         return { isMutation: false, artifactId };
-    }, [store.artifacts]);
+    }, [store.artifacts, hasHydrated]);
 
     // Execute mutation
     const executeMutation = useCallback((
         artifactId: string,
-        intent: any,
+        intent: MutationIntent,
         reason?: string
     ): { success: boolean; error?: string } => {
         const artifact = store.getArtifact(artifactId);
@@ -136,6 +147,7 @@ export function useArtifactSystem() {
         // Validate
         const validation = validateMutation(artifact, intent);
         if (!validation.valid) {
+            console.error('❌ Mutation validation failed:', validation.error);
             return { success: false, error: validation.error };
         }
 
@@ -154,6 +166,7 @@ export function useArtifactSystem() {
             store.addMutation(result.mutation);
         }
 
+        console.log(`✅ Mutation applied on ${artifactId}`);
         return { success: true };
     }, [store]);
 
@@ -161,10 +174,10 @@ export function useArtifactSystem() {
     const createRelationship = useCallback((
         sourceId: string,
         targetId: string,
-        type: 'references' | 'depends_on' | 'conflicts_with' | 'derived_from' | 'similar_to',
-        _metadata?: Record<string, any>
+        type: 'references' | 'depends_on' | 'conflicts_with' | 'derived_from' | 'similar_to'
     ): string => {
         const relationship = store.addRelationship(sourceId, targetId, type);
+        console.log(`🔗 Created relationship: ${sourceId} → ${targetId} (${type})`);
         return relationship.id;
     }, [store]);
 
@@ -173,6 +186,7 @@ export function useArtifactSystem() {
         artifacts: store.artifacts,
         mutations: store.mutations,
         relationships: store.relationships,
+        hasHydrated,
 
         // Operations
         createArtifact,
@@ -193,19 +207,29 @@ export function useArtifactSystem() {
         getContextString,
         processMessage,
         resolveReference: (ref: string) => resolveReference(ref, store.artifacts),
+
+        // Utility
+        clear: store.clear,
+        getAllArtifacts: store.getAllArtifacts,
     };
 }
 
 /**
- * Context helper for Tambo AI
- * Automatically provides artifact context to all AI requests
+ * Context helper for Tambo AI with hydration check
  */
 export function useArtifactContextHelper() {
-    const { getContextString, artifacts } = useArtifactSystem();
+    const { getContextString, artifacts, hasHydrated } = useArtifactSystem();
 
-    // This should be used with Tambo's context helpers
-    // Returns context object that Tambo includes in prompts
     return useCallback(() => {
+        if (!hasHydrated) {
+            return {
+                artifacts: {
+                    status: 'loading',
+                    message: 'Artifacts are being loaded...',
+                },
+            };
+        }
+
         const artifactList = Object.values(artifacts);
 
         return {
@@ -214,7 +238,8 @@ export function useArtifactContextHelper() {
                 context: getContextString(),
                 ids: artifactList.map(a => a.id),
                 types: [...new Set(artifactList.map(a => a.type))],
+                status: 'ready',
             },
         };
-    }, [artifacts, getContextString]);
+    }, [artifacts, getContextString, hasHydrated]);
 }
