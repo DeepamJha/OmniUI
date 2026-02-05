@@ -124,24 +124,29 @@ This shows real-time or current STATUS with metrics, not analysis.
         }),
     },
 
-    // FLOWCHART COMPONENT - for processes and workflows
+    // FLOWCHART COMPONENT - MUST be used for ANY visual diagram request
     {
         name: "InteractiveFlowchart",
         description: `
-Use when the user asks for:
-- Process flows or workflows
-- Decision trees or pipelines
-- Step-by-step procedures with branching
-- Visual diagram of a system or process
-- Deployment pipelines, CI/CD flows
-- State machines or transitions
+**MUST USE THIS COMPONENT** when the user mentions ANY of these keywords:
+- "flowchart", "flow chart", "diagram", "visual", "visualize"
+- "pipeline", "CI/CD", "workflow", "process flow"
+- "decision tree", "state machine", "nodes", "connections"
 
-Do NOT use for:
-- Simple linear plans (use ExecutionPlan instead)
-- Status dashboards (use SystemStatusPanel)
-- Results or findings (use CommandResultPanel)
+Use cases (ALWAYS use InteractiveFlowchart for these):
+- CI/CD pipelines and deployment flows
+- Process diagrams and workflows
+- Decision trees with branching logic
+- State machines and transitions
+- Any request to "show", "visualize", or "diagram" a process
 
-This shows VISUAL diagrams with nodes and connections. Use when the user wants to SEE a process, not just read steps.
+This component renders an INTERACTIVE visual diagram with:
+- Clickable nodes (start, process, decision, end types)
+- Animated connection lines
+- Drag-to-rearrange functionality
+- Status indicators (pending, active, completed, error)
+
+Do NOT use CommandResultPanel or ExecutionPlan for flowchart/diagram requests.
 `,
         component: InteractiveFlowchart,
         propsSchema: interactiveFlowchartSchema,
