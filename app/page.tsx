@@ -93,8 +93,10 @@ function MessageComponent({
 }) {
   const message = useTamboCurrentMessage();
   const capturedRef = useRef<Set<string>>(new Set());
+  const textAccumulatorRef = useRef<{ messageId: string; text: string; timeout: NodeJS.Timeout | null }>({ messageId: '', text: '', timeout: null });
 
   // Capture when renderedComponent becomes available OR text is finalized
+  // Uses debouncing to wait for streaming to complete
   useEffect(() => {
     if (!message?.id) return;
     if (capturedRef.current.has(message.id)) return;
@@ -110,25 +112,37 @@ function MessageComponent({
         console.log('✅ Found artifact component:', artifact.name, artifact.props);
         capturedRef.current.add(message.id);
         onCaptureArtifact?.(message.id, artifact.node, artifact.name, artifact.props);
-      } else {
-        // No schema-backed component found - check for text content
-        console.warn('⚠️ No artifact component found in tree, checking text content');
-        const textContent = getMessageText(message.content);
-        if (textContent && textContent.trim().length > 0) {
-          console.log('💬 Using text fallback for:', message.id);
-          capturedRef.current.add(message.id);
-          onTextFallback?.(textContent);
-        }
+        return;  // Exit early - we found an artifact
       }
     }
-    // If no component but we have text content, use fallback
-    else {
-      const textContent = getMessageText(message.content);
-      if (textContent && textContent.trim().length > 0) {
-        console.log('💬 MessageComponent using text fallback:', message.id);
-        capturedRef.current.add(message.id);
-        onTextFallback?.(textContent);
+
+    // For text content: accumulate and debounce to wait for streaming
+    const textContent = getMessageText(message.content);
+    if (textContent && textContent.trim().length > 0) {
+      // Clear previous timeout
+      if (textAccumulatorRef.current.timeout) {
+        clearTimeout(textAccumulatorRef.current.timeout);
       }
+
+      // Accumulate text (streaming may update content multiple times)
+      if (textAccumulatorRef.current.messageId !== message.id) {
+        textAccumulatorRef.current = { messageId: message.id, text: '', timeout: null };
+      }
+
+      // Keep the longer text (streaming accumulates)
+      if (textContent.length > textAccumulatorRef.current.text.length) {
+        textAccumulatorRef.current.text = textContent;
+      }
+
+      // Debounce: wait 500ms after last update before capturing
+      textAccumulatorRef.current.timeout = setTimeout(() => {
+        if (capturedRef.current.has(message.id)) return;
+
+        const finalText = textAccumulatorRef.current.text;
+        console.log('💬 Capturing text after debounce:', finalText.length, 'chars');
+        capturedRef.current.add(message.id);
+        onTextFallback?.(finalText);
+      }, 500);
     }
   }, [message?.renderedComponent, message?.content, message?.id, onCaptureArtifact, onTextFallback]);
 
@@ -184,12 +198,18 @@ export default function Home() {
     }
   }, [artifactSystem]);
 
-  // Create fallback artifact for plain text AI responses (FIX: All AI output = artifact)
+  // Create fallback artifact for plain text AI responses
+  // Stores FULL text, no truncation
   const handleTextResponse = useCallback((messageId: string, textContent: string) => {
     if (processedMessageIds.current.has(messageId)) return;
     if (!textContent || textContent.trim().length === 0) return;
 
-    console.log('💬 Creating TextResponse artifact for plain text');
+    console.log('💬 Creating TextResponse artifact, full length:', textContent.length, 'chars');
+
+    // ✅ Store FULL text - no truncation!
+    // Split into paragraphs if long, otherwise single item
+    const paragraphs = textContent.split(/\n\n+/).filter(p => p.trim().length > 0);
+    const items = paragraphs.length > 1 ? paragraphs : [textContent];
 
     // Create a CommandResultPanel artifact for text responses
     const artifactId = artifactSystem.createArtifact(
@@ -197,16 +217,14 @@ export default function Home() {
       {
         title: 'AI Response',
         status: 'success',
-        summary: textContent.slice(0, 200) + (textContent.length > 200 ? '...' : ''),
-        items: textContent.length > 200
-          ? [textContent.slice(0, 500) + '...']
-          : [textContent]
+        summary: textContent.slice(0, 300) + (textContent.length > 300 ? '...' : ''),
+        items: items,  // ✅ Full text stored here
       },
       (components.find(c => c.name === 'CommandResultPanel')?.propsSchema as any) || {},
       'AI Response'
     );
 
-    console.log('✅ Created fallback artifact:', artifactId);
+    console.log('✅ Created fallback artifact:', artifactId, 'with', items.length, 'items');
     processedMessageIds.current.add(messageId);
   }, [artifactSystem]);
 
