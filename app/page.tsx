@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useArtifactSystem } from "@/lib/hooks/use-artifact-system";
 import { ArtifactCanvas } from "@/components/artifacts/ArtifactRenderer";
 import { components } from "@/components/lib/tambo";
+import { detectCrossArtifactQuery, buildCrossArtifactContext } from "@/lib/artifacts/cross-artifact-reasoning";
 
 // Helper to extract text content from message
 function getMessageText(content: unknown): string {
@@ -138,15 +139,36 @@ export default function Home() {
         status: 'success',
         summary: textContent.slice(0, 200) + (textContent.length > 200 ? '...' : ''),
         items: textContent.length > 200
-          ? textContent.slice(200).split('\n').filter(line => line.trim()).slice(0, 5)
-          : [],
+          ? [textContent.slice(0, 500) + '...']
+          : [textContent]
       },
-      null,
+      (components.find(c => c.name === 'CommandResultPanel')?.propsSchema as any) || {},
       'AI Response'
     );
 
-    console.log('✅ Created text artifact:', artifactId);
+    console.log('✅ Created fallback artifact:', artifactId);
     processedMessageIds.current.add(messageId);
+  }, [artifactSystem]);
+
+  // Handle explicit tool calls (like create_relationship)
+  const handleToolCall = useCallback((toolCall: any) => {
+    console.log('🛠️ Handling tool call:', toolCall);
+
+    if (toolCall.name === 'create_relationship') {
+      const { source_id, target_id, type } = toolCall.input;
+
+      console.log(`🔗 Creating relationship: ${source_id} -> ${type} -> ${target_id}`);
+
+      const relId = artifactSystem.createRelationship(source_id, target_id, type);
+
+      return {
+        success: true,
+        relationship_id: relId,
+        message: `Successfully linked #${source_id} to #${target_id} as ${type}`
+      };
+    }
+
+    return { success: false, error: 'Unknown tool' };
   }, [artifactSystem]);
 
   const demoPrompts = [
@@ -157,8 +179,34 @@ export default function Home() {
 
   const handleGenerate = async () => {
     if (!taskInput.trim()) return;
+    if (isIdle === false) return; // Wait for previous generation
 
-    // Check if this is a mutation request
+    // 🧠 1. Cross-Artifact Reasoning Check
+    if (thread?.messages && thread.messages.length > 0) {
+      const crossArtifactQuery = detectCrossArtifactQuery(
+        taskInput,
+        artifactSystem.artifacts
+      );
+
+      if (crossArtifactQuery) {
+        console.log('🔗 Cross-artifact query detected:', crossArtifactQuery);
+
+        const context = buildCrossArtifactContext(
+          crossArtifactQuery,
+          artifactSystem.artifacts
+        );
+
+        // Send to AI with enhanced context
+        await sendThreadMessage(taskInput, {
+          additionalContext: { crossArtifactContext: context },
+        });
+
+        setTaskInput("");
+        return;
+      }
+    }
+
+    // 2. Local Mutation Check (Legacy/Fallback)
     const analysis = artifactSystem.processMessage(taskInput);
 
     if (analysis.isMutation && analysis.intent && analysis.artifactId) {
@@ -170,13 +218,22 @@ export default function Home() {
       );
 
       if (result.success) {
+        console.log('✅ Local mutation executed:', result);
+        // Create a synthetic user message for consistency
+        await sendThreadMessage(taskInput);
         setTaskInput("");
-        return; // Don't send to AI, we handled it
+        return;
       }
     }
 
-    // Normal AI request
-    await sendThreadMessage(taskInput);
+    // 3. Standard Generation
+    // Get context from all artifacts to inform the new generation
+    const context = artifactSystem.getContextString();
+
+    await sendThreadMessage(taskInput, {
+      additionalContext: { artifactContext: context },
+    });
+
     setTaskInput("");
   };
 

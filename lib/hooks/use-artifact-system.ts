@@ -316,7 +316,7 @@ Analyze the above artifacts to answer the user's question.`;
         getMutations: store.getMutations,
 
         // Relationships
-        createRelationship,
+        createRelationship: store.addRelationship,
         getRelated: store.getRelated,
 
         // Context & Processing

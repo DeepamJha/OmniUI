@@ -123,3 +123,28 @@ This shows real-time or current STATUS with metrics, not analysis.
         }),
     },
 ];
+
+/**
+ * OmniUI Tool Registry
+ * 
+ * Tools allow the AI to perform explicit actions beyond just rendering UI.
+ */
+export const tools = [
+    {
+        name: 'create_relationship',
+        description: 'Link two artifacts together explicitly when one references, depends on, or relates to another. Use this when the user asks to link items or when you discover a dependency.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                source_id: { type: 'string', description: 'Source artifact ID (e.g. "a1b2c3d4")' },
+                target_id: { type: 'string', description: 'Target artifact ID (e.g. "e5f6g7h8")' },
+                type: {
+                    type: 'string',
+                    enum: ['references', 'depends_on', 'derived_from', 'conflicts_with'],
+                    description: 'Type of relationship',
+                },
+            },
+            required: ['source_id', 'target_id', 'type'],
+        },
+    },
+];
