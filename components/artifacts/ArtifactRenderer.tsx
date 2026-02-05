@@ -16,9 +16,11 @@ export function ArtifactCanvas({ onAction }: ArtifactCanvasProps = {}) {
     const artifacts = useArtifactStore((state) => state.artifacts);
 
     // Sort by creation time (oldest first)
-    const artifactIds = Object.keys(artifacts).sort((a, b) => {
-        return artifacts[a].createdAt - artifacts[b].createdAt;
-    });
+    const artifactIds = useMemo(() => {
+        return Object.keys(artifacts).sort((a, b) => {
+            return artifacts[a].createdAt - artifacts[b].createdAt;
+        });
+    }, [artifacts]);
 
     // While hydrating, show loading
     if (!hasHydrated) {
@@ -174,12 +176,30 @@ function MutationHistoryItem({ mutation, isLatest }: { mutation: Mutation; isLat
  * Related Artifacts Section
  */
 function RelatedArtifacts({ artifactId }: { artifactId: string }) {
-    const relationships = useArtifactStore((state) =>
-        state.relationships.filter(r => r.sourceId === artifactId || r.targetId === artifactId)
-    );
+    // ✅ Select raw state only
+    const allRelationships = useArtifactStore((state) => state.relationships);
     const artifacts = useArtifactStore((state) => state.artifacts);
 
+    // ✅ Derive data with useMemo
+    const relationships = useMemo(() => {
+        return allRelationships.filter(
+            (r) => r.sourceId === artifactId || r.targetId === artifactId
+        );
+    }, [allRelationships, artifactId]);
+
     if (relationships.length === 0) return null;
+
+    const relatedArtifacts = useMemo(() => {
+        return relationships
+            .map((r) =>
+                r.sourceId === artifactId
+                    ? artifacts[r.targetId]
+                    : artifacts[r.sourceId]
+            )
+            .filter(Boolean);
+    }, [relationships, artifacts, artifactId]);
+
+    if (relatedArtifacts.length === 0) return null;
 
     const getRelatedId = (rel: typeof relationships[0]) =>
         rel.sourceId === artifactId ? rel.targetId : rel.sourceId;
