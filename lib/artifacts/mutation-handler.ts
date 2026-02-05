@@ -1,55 +1,148 @@
-// Mutation handler - parses user messages and applies mutations to artifacts
+// Mutation detection and application - merged best of both versions
 
-import type { Artifact, MutationIntent, MutationType, MutationResult, Mutation } from './types';
-import { resolveReference, hasArtifactReference } from './reference-resolver';
-
-/**
- * Mutation patterns that users might use
- */
-const MUTATION_PATTERNS: { pattern: RegExp; operation: MutationType }[] = [
-    // Remove operations
-    { pattern: /(?:remove|delete|drop)\s+(?:item\s+)?(\d+|the\s+\w+\s+(?:item|step|one))/i, operation: 'remove_item' },
-    { pattern: /(?:remove|delete)\s+(?:the\s+)?(?:last|first)\s+(?:item|step|one)/i, operation: 'remove_item' },
-
-    // Add operations  
-    { pattern: /(?:add|append|insert)\s+['""]?(.+?)['""]?\s+(?:to|into|in)/i, operation: 'add_item' },
-    { pattern: /(?:add|append)\s+(?:a\s+)?(?:new\s+)?(?:item|step)/i, operation: 'add_item' },
-
-    // Update operations
-    { pattern: /(?:update|change|set|mark)\s+(?:item\s+)?(\d+|the\s+\w+)/i, operation: 'update_item' },
-    { pattern: /(?:update|change|set)\s+(?:the\s+)?(?:status|title|name)\s+to/i, operation: 'update_property' },
-    { pattern: /(?:mark|set)\s+(?:as|to)\s+(?:complete|done|finished)/i, operation: 'update_item' },
-
-    // Reorder operations
-    { pattern: /(?:move|reorder|swap)\s+(?:item\s+)?(\d+)/i, operation: 'reorder_items' },
-];
+import type { Artifact, MutationType, MutationResult, Mutation } from './types';
+import { resolveReference } from './reference-resolver';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Parse a message to detect mutation intent
+ * Mutation intent detected from natural language
  */
-export function parseMutationIntent(
-    message: string,
+export interface MutationIntent {
+    type: MutationType;
+    artifactId: string;
+    details: {
+        itemIndex?: number;
+        itemId?: string;
+        property?: string;
+        value?: any;
+        condition?: (item: any) => boolean;
+    };
+    originalMessage: string;
+}
+
+/**
+ * Mutation patterns with inline extractors
+ * Easy to add new patterns - logic is right next to the regex
+ */
+const MUTATION_PATTERNS: Array<{
+    pattern: RegExp;
+    type: MutationType;
+    extractor: (match: RegExpMatchArray, message: string) => Partial<MutationIntent['details']>;
+}> = [
+        // Remove operations
+        {
+            pattern: /(?:remove|delete)\s+(?:item\s+)?(\d+|the\s+(?:first|second|third|last))/i,
+            type: 'remove_item',
+            extractor: (match) => {
+                const indexStr = match[1];
+                if (indexStr.match(/\d+/)) {
+                    return { itemIndex: parseInt(indexStr) - 1 }; // Convert to 0-based
+                }
+                const ordinalMap: Record<string, number> = {
+                    'first': 0, 'second': 1, 'third': 2, 'last': -1
+                };
+                for (const [ordinal, index] of Object.entries(ordinalMap)) {
+                    if (indexStr.includes(ordinal)) {
+                        return { itemIndex: index };
+                    }
+                }
+                return {};
+            },
+        },
+        {
+            pattern: /(?:remove|delete)\s+(?:the\s+)?(?:last|first)\s+(?:item|step|one)/i,
+            type: 'remove_item',
+            extractor: (_, message) => {
+                if (/last/i.test(message)) return { itemIndex: -1 };
+                if (/first/i.test(message)) return { itemIndex: 0 };
+                return {};
+            },
+        },
+        {
+            pattern: /(?:remove|delete)\s+completed/i,
+            type: 'remove_item',
+            extractor: () => ({
+                condition: (item: any) => item.completed === true || item.status === 'complete',
+            }),
+        },
+
+        // Add operations
+        {
+            pattern: /(?:add|insert)\s+['"]?(.+?)['"]?\s+(?:to|into|at)/i,
+            type: 'add_item',
+            extractor: (match) => ({ value: match[1].trim() }),
+        },
+        {
+            pattern: /(?:add|append)\s+(?:a\s+)?(?:new\s+)?(?:item|step)/i,
+            type: 'add_item',
+            extractor: () => ({ value: 'New item' }),
+        },
+
+        // Update operations
+        {
+            pattern: /(?:mark)\s+(?:item\s+)?(\d+)\s+(?:as\s+)?(\w+)/i,
+            type: 'update_item',
+            extractor: (match) => ({
+                itemIndex: parseInt(match[1]) - 1,
+                property: 'status',
+                value: match[2],
+            }),
+        },
+        {
+            pattern: /(?:mark|set)\s+(?:as|to)\s+(?:complete|done|finished)/i,
+            type: 'update_item',
+            extractor: () => ({ property: 'completed', value: true }),
+        },
+        {
+            pattern: /(?:change|update|set)\s+(.+?)\s+to\s+['"]?(.+?)['"]?$/i,
+            type: 'update_property',
+            extractor: (match) => ({
+                property: match[1].trim().toLowerCase(),
+                value: match[2].trim(),
+            }),
+        },
+
+        // Reorder operations
+        {
+            pattern: /(?:move|reorder)\s+(?:item\s+)?(\d+)\s+(?:to|before|after)\s+(\d+)/i,
+            type: 'reorder_items',
+            extractor: (match) => ({
+                itemIndex: parseInt(match[1]) - 1,
+                value: parseInt(match[2]) - 1,
+            }),
+        },
+    ];
+
+/**
+ * Detect mutation intent from natural language
+ */
+export function detectMutation(
+    userMessage: string,
     artifacts: Record<string, Artifact>,
     recentArtifactIds: string[] = []
 ): MutationIntent | null {
-    // First check if this looks like a mutation
-    const isMutation = MUTATION_PATTERNS.some(({ pattern }) => pattern.test(message));
-    if (!isMutation) return null;
+    const artifactId = resolveReference(userMessage, artifacts, recentArtifactIds);
+    if (!artifactId) {
+        // Try with most recent artifact as fallback
+        const artifactList = Object.values(artifacts);
+        if (artifactList.length === 0) return null;
+        const mostRecent = artifactList.sort((a, b) => b.createdAt - a.createdAt)[0];
+        if (!mostRecent) return null;
+    }
 
-    // Resolve which artifact is being referenced
-    const artifactId = resolveReference(message, artifacts, recentArtifactIds);
-    if (!artifactId) return null;
+    const normalized = userMessage.toLowerCase();
 
-    // Determine the operation
-    for (const { pattern, operation } of MUTATION_PATTERNS) {
-        const match = message.match(pattern);
+    for (const { pattern, type, extractor } of MUTATION_PATTERNS) {
+        const match = normalized.match(pattern);
         if (match) {
+            const resolvedId = artifactId || Object.values(artifacts).sort((a, b) => b.createdAt - a.createdAt)[0]?.id;
+            if (!resolvedId) return null;
+
             return {
-                artifactId,
-                operation,
-                target: extractTarget(message, operation),
-                value: extractValue(message, operation),
-                originalMessage: message,
+                type,
+                artifactId: resolvedId,
+                details: extractor(match, userMessage),
+                originalMessage: userMessage,
             };
         }
     }
@@ -58,251 +151,223 @@ export function parseMutationIntent(
 }
 
 /**
- * Extract the target of the mutation (e.g., "item 3", "the last step")
+ * Check if message looks like a mutation request
  */
-function extractTarget(message: string, operation: MutationType): string {
-    switch (operation) {
+export function isMutationRequest(message: string): boolean {
+    return MUTATION_PATTERNS.some(({ pattern }) => pattern.test(message.toLowerCase()));
+}
+
+/**
+ * Validates that a mutation is safe to apply
+ */
+export function validateMutation(
+    artifact: Artifact,
+    intent: MutationIntent
+): { valid: boolean; error?: string } {
+    if (!artifact) {
+        return { valid: false, error: 'Artifact not found' };
+    }
+
+    const state = artifact.state;
+    const arrayField = findArrayField(state);
+
+    switch (intent.type) {
         case 'remove_item':
-        case 'update_item': {
-            // Look for "item X" or ordinal references
-            const itemMatch = message.match(/item\s+(\d+)/i);
-            if (itemMatch) return `item ${itemMatch[1]}`;
+        case 'update_item':
+            if (!arrayField || !Array.isArray(state[arrayField])) {
+                return { valid: false, error: 'Artifact has no items to modify' };
+            }
+            if (intent.details.itemIndex !== undefined && !intent.details.condition) {
+                const index = intent.details.itemIndex === -1
+                    ? state[arrayField].length - 1
+                    : intent.details.itemIndex;
+                if (index < 0 || index >= state[arrayField].length) {
+                    return { valid: false, error: `Item ${index + 1} doesn't exist (only ${state[arrayField].length} items)` };
+                }
+            }
+            break;
 
-            if (/last/i.test(message)) return 'last';
-            if (/first/i.test(message)) return 'first';
-            if (/second|2nd/i.test(message)) return 'second';
-            if (/third|3rd/i.test(message)) return 'third';
+        case 'add_item':
+            if (!arrayField) {
+                return { valid: false, error: 'Artifact has no list to add to' };
+            }
+            break;
 
-            return 'unknown';
-        }
-        case 'update_property': {
-            const propMatch = message.match(/(?:status|title|name)/i);
-            return propMatch ? propMatch[0].toLowerCase() : 'unknown';
-        }
-        default:
-            return 'unknown';
+        case 'update_property':
+            if (intent.details.property && !(intent.details.property in state)) {
+                return { valid: false, error: `Property "${intent.details.property}" not found` };
+            }
+            break;
     }
+
+    return { valid: true };
 }
 
 /**
- * Extract the new value for the mutation
- */
-function extractValue(message: string, operation: MutationType): any {
-    switch (operation) {
-        case 'add_item': {
-            // Extract quoted content or content after "add"
-            const quotedMatch = message.match(/['""](.+?)['"]/);
-            if (quotedMatch) return quotedMatch[1];
-
-            const addMatch = message.match(/add\s+(.+?)(?:\s+to|\s+into|$)/i);
-            if (addMatch) return addMatch[1].trim();
-
-            return null;
-        }
-        case 'update_property': {
-            const toMatch = message.match(/to\s+['""]?(.+?)['""]?$/i);
-            return toMatch ? toMatch[1].trim() : null;
-        }
-        case 'update_item': {
-            if (/complete|done|finished/i.test(message)) return { completed: true };
-            if (/incomplete|pending|todo/i.test(message)) return { completed: false };
-            return null;
-        }
-        default:
-            return null;
-    }
-}
-
-/**
- * Apply a mutation to an artifact
+ * Apply mutation to artifact - returns new state and mutation record
  */
 export function applyMutation(
     artifact: Artifact,
-    intent: MutationIntent
+    intent: MutationIntent,
+    source: 'user' | 'ai' = 'user'
 ): MutationResult {
-    const { operation, target, value } = intent;
+    // Validate first
+    const validation = validateMutation(artifact, intent);
+    if (!validation.valid) {
+        return { success: false, error: validation.error };
+    }
 
     try {
-        switch (operation) {
+        switch (intent.type) {
             case 'remove_item':
-                return applyRemoveItem(artifact, target);
+                return applyRemoveItem(artifact, intent, source);
             case 'add_item':
-                return applyAddItem(artifact, value);
+                return applyAddItem(artifact, intent, source);
             case 'update_item':
-                return applyUpdateItem(artifact, target, value);
+                return applyUpdateItem(artifact, intent, source);
             case 'update_property':
-                return applyUpdateProperty(artifact, target, value);
+                return applyUpdateProperty(artifact, intent, source);
+            case 'reorder_items':
+                return applyReorderItems(artifact, intent, source);
             default:
-                return { success: false, error: `Unsupported operation: ${operation}` };
+                return { success: false, error: `Unsupported operation: ${intent.type}` };
         }
     } catch (error) {
         return { success: false, error: String(error) };
     }
 }
 
-function applyRemoveItem(artifact: Artifact, target: string): MutationResult {
+// ============ Separated Apply Functions ============
+
+function applyRemoveItem(artifact: Artifact, intent: MutationIntent, source: 'user' | 'ai'): MutationResult {
     const state = artifact.state;
+    const arrayField = findArrayField(state)!;
+    const array = [...state[arrayField]]; // Clone array
 
-    // Find array field in state
-    const arrayField = findArrayField(state);
-    if (!arrayField) {
-        return { success: false, error: 'No list found in artifact' };
+    let previousValue: any;
+    let newArray: any[];
+
+    if (intent.details.condition) {
+        // Condition-based removal (e.g., "remove completed")
+        previousValue = array.filter(intent.details.condition);
+        newArray = array.filter((item) => !intent.details.condition!(item));
+    } else {
+        const index = intent.details.itemIndex === -1
+            ? array.length - 1
+            : intent.details.itemIndex!;
+
+        previousValue = array[index];
+        newArray = [...array.slice(0, index), ...array.slice(index + 1)];
     }
-
-    const array = state[arrayField] as any[];
-    const index = resolveItemIndex(target, array.length);
-
-    if (index === -1 || index >= array.length) {
-        return { success: false, error: `Item ${target} not found` };
-    }
-
-    const previousValue = array[index];
-    const newArray = [...array.slice(0, index), ...array.slice(index + 1)];
 
     return {
         success: true,
         newState: { ...state, [arrayField]: newArray },
-        mutation: {
-            id: '',
-            artifactId: artifact.id,
-            operation: 'remove_item',
-            path: [arrayField, String(index)],
-            previousValue,
-            timestamp: Date.now(),
-            source: 'user',
-        },
+        mutation: createMutation(artifact.id, 'remove_item', [arrayField], previousValue, source, intent.originalMessage),
     };
 }
 
-function applyAddItem(artifact: Artifact, value: any): MutationResult {
+function applyAddItem(artifact: Artifact, intent: MutationIntent, source: 'user' | 'ai'): MutationResult {
     const state = artifact.state;
+    const arrayField = findArrayField(state)!;
+    const array = state[arrayField];
 
-    // Find array field in state
-    const arrayField = findArrayField(state);
-    if (!arrayField) {
-        return { success: false, error: 'No list found in artifact' };
-    }
-
-    const array = state[arrayField] as any[];
-    const newItem = typeof value === 'string' ? { title: value, description: '' } : value;
+    const newItem = typeof intent.details.value === 'string'
+        ? { id: uuidv4().split('-')[0], title: intent.details.value, completed: false }
+        : intent.details.value;
 
     return {
         success: true,
         newState: { ...state, [arrayField]: [...array, newItem] },
-        mutation: {
-            id: '',
-            artifactId: artifact.id,
-            operation: 'add_item',
-            path: [arrayField, String(array.length)],
-            value: newItem,
-            timestamp: Date.now(),
-            source: 'user',
-        },
+        mutation: createMutation(artifact.id, 'add_item', [arrayField, String(array.length)], newItem, source, intent.originalMessage),
     };
 }
 
-function applyUpdateItem(artifact: Artifact, target: string, value: any): MutationResult {
+function applyUpdateItem(artifact: Artifact, intent: MutationIntent, source: 'user' | 'ai'): MutationResult {
     const state = artifact.state;
+    const arrayField = findArrayField(state)!;
+    const array = [...state[arrayField]];
 
-    // Find array field in state
-    const arrayField = findArrayField(state);
-    if (!arrayField) {
-        return { success: false, error: 'No list found in artifact' };
-    }
-
-    const array = state[arrayField] as any[];
-    const index = resolveItemIndex(target, array.length);
-
-    if (index === -1 || index >= array.length) {
-        return { success: false, error: `Item ${target} not found` };
-    }
+    const index = intent.details.itemIndex === -1
+        ? array.length - 1
+        : intent.details.itemIndex!;
 
     const previousValue = array[index];
-    const updatedItem = { ...array[index], ...value };
-    const newArray = [...array.slice(0, index), updatedItem, ...array.slice(index + 1)];
+    const updatedItem = intent.details.property
+        ? { ...array[index], [intent.details.property]: intent.details.value }
+        : { ...array[index], ...intent.details.value };
+
+    array[index] = updatedItem;
 
     return {
         success: true,
-        newState: { ...state, [arrayField]: newArray },
-        mutation: {
-            id: '',
-            artifactId: artifact.id,
-            operation: 'update_item',
-            path: [arrayField, String(index)],
-            value: updatedItem,
-            previousValue,
-            timestamp: Date.now(),
-            source: 'user',
-        },
+        newState: { ...state, [arrayField]: array },
+        mutation: createMutation(artifact.id, 'update_item', [arrayField, String(index)], previousValue, source, intent.originalMessage),
     };
 }
 
-function applyUpdateProperty(artifact: Artifact, target: string, value: any): MutationResult {
+function applyUpdateProperty(artifact: Artifact, intent: MutationIntent, source: 'user' | 'ai'): MutationResult {
     const state = artifact.state;
-
-    if (!(target in state)) {
-        return { success: false, error: `Property ${target} not found` };
-    }
-
-    const previousValue = state[target];
+    const property = intent.details.property!;
+    const previousValue = state[property];
 
     return {
         success: true,
-        newState: { ...state, [target]: value },
-        mutation: {
-            id: '',
-            artifactId: artifact.id,
-            operation: 'update_property',
-            path: [target],
-            value,
-            previousValue,
-            timestamp: Date.now(),
-            source: 'user',
-        },
+        newState: { ...state, [property]: intent.details.value },
+        mutation: createMutation(artifact.id, 'update_property', [property], previousValue, source, intent.originalMessage),
     };
 }
 
-/**
- * Find the main array field in artifact state
- */
-function findArrayField(state: Record<string, any>): string | null {
-    // Common array field names
-    const commonNames = ['items', 'steps', 'tasks', 'metrics', 'list', 'entries'];
+function applyReorderItems(artifact: Artifact, intent: MutationIntent, source: 'user' | 'ai'): MutationResult {
+    const state = artifact.state;
+    const arrayField = findArrayField(state)!;
+    const array = [...state[arrayField]];
 
+    const fromIndex = intent.details.itemIndex!;
+    const toIndex = intent.details.value as number;
+
+    const [item] = array.splice(fromIndex, 1);
+    array.splice(toIndex, 0, item);
+
+    return {
+        success: true,
+        newState: { ...state, [arrayField]: array },
+        mutation: createMutation(artifact.id, 'reorder_items', [arrayField], { from: fromIndex, to: toIndex }, source, intent.originalMessage),
+    };
+}
+
+// ============ Helpers ============
+
+function findArrayField(state: Record<string, any>): string | null {
+    const commonNames = ['items', 'steps', 'tasks', 'metrics', 'list', 'entries'];
     for (const name of commonNames) {
         if (Array.isArray(state[name])) return name;
     }
-
-    // Fall back to first array field
     for (const [key, value] of Object.entries(state)) {
         if (Array.isArray(value)) return key;
     }
-
     return null;
 }
 
-/**
- * Resolve item index from target string
- */
-function resolveItemIndex(target: string, arrayLength: number): number {
-    // Direct number
-    const numMatch = target.match(/(\d+)/);
-    if (numMatch) {
-        return parseInt(numMatch[1], 10) - 1; // 1-indexed to 0-indexed
-    }
-
-    // Ordinal words
-    if (/first/i.test(target)) return 0;
-    if (/second|2nd/i.test(target)) return 1;
-    if (/third|3rd/i.test(target)) return 2;
-    if (/last/i.test(target)) return arrayLength - 1;
-
-    return -1;
+function createMutation(
+    artifactId: string,
+    operation: MutationType,
+    path: string[],
+    previousValue: any,
+    source: 'user' | 'ai',
+    reason?: string
+): Mutation {
+    return {
+        id: `mut_${uuidv4().split('-')[0]}`,
+        artifactId,
+        operation,
+        path,
+        previousValue,
+        timestamp: Date.now(),
+        source,
+        reason,
+    };
 }
 
-/**
- * Check if a message looks like a mutation request
- */
-export function isMutationRequest(message: string): boolean {
-    return MUTATION_PATTERNS.some(({ pattern }) => pattern.test(message));
-}
+// Legacy exports for compatibility
+export { detectMutation as parseMutationIntent };

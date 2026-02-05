@@ -3,8 +3,8 @@
 import { useCallback, useMemo } from 'react';
 import { ZodSchema } from 'zod';
 import { useArtifactStore } from '../artifacts/store';
-import { parseMutationIntent, applyMutation, isMutationRequest } from '../artifacts/mutation-handler';
-import type { Artifact, MutationIntent, MutationResult } from '../artifacts/types';
+import { detectMutation, applyMutation, isMutationRequest, MutationIntent } from '../artifacts/mutation-handler';
+import type { Artifact, MutationResult } from '../artifacts/types';
 
 export interface UseArtifactSystemReturn {
     // State
@@ -40,8 +40,8 @@ export function useArtifactSystem(): UseArtifactSystemReturn {
             return { isMutation: false };
         }
 
-        // Try to parse mutation intent
-        const intent = parseMutationIntent(message, store.artifacts);
+        // Try to detect mutation intent
+        const intent = detectMutation(message, store.artifacts);
         if (!intent) {
             return { isMutation: false };
         }
@@ -63,24 +63,22 @@ export function useArtifactSystem(): UseArtifactSystemReturn {
             return { success: false, error: `Artifact ${artifactId} not found` };
         }
 
-        // Apply the mutation
-        const result = applyMutation(artifact, intent);
+        // Apply the mutation (validation is built-in)
+        const result = applyMutation(artifact, intent, 'user');
 
         if (result.success && result.newState) {
             // Update the store
-            const updateResult = store.updateArtifact(artifactId, result.newState);
+            store.updateArtifact(artifactId, result.newState);
 
             // Record the mutation
             if (result.mutation) {
                 store.addMutation({
                     ...result.mutation,
                     artifactId,
-                    source: 'user',
-                    reason: intent.originalMessage,
                 });
             }
 
-            return updateResult;
+            return { success: true, newState: result.newState };
         }
 
         return result;
