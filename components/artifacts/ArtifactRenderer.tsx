@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { useArtifactStore, useArtifactHydration } from '@/lib/artifacts/store';
 import type { Artifact, Mutation } from '@/lib/artifacts/types';
+import { EditableSelect } from '@/lib/artifacts/inline-editing';
+import { ArtifactActionsPanel, generateArtifactActions } from '@/lib/artifacts/artifact-actions';
 
 interface ArtifactCanvasProps {
     onAction?: (prompt: string) => void;
@@ -533,7 +535,28 @@ function ExecutionPlanContent({ state, artifactId, onEdit }: {
                                 {step.description && (
                                     <p className="text-sm text-gray-500">{step.description}</p>
                                 )}
-                                {step.estimated_time && (
+                                {/* Inline Status Selector */}
+                                {artifactId && (
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <EditableSelect
+                                            artifactId={artifactId}
+                                            path={['steps', String(i), 'status']}
+                                            value={step.status || 'pending'}
+                                            options={[
+                                                { label: '⏳ Pending', value: 'pending' },
+                                                { label: '🔄 In Progress', value: 'in_progress' },
+                                                { label: '✅ Complete', value: 'complete' },
+                                                { label: '⏸️ Blocked', value: 'blocked' },
+                                            ]}
+                                        />
+                                        {step.estimated_time && (
+                                            <span className="text-xs text-gray-600">
+                                                ~{step.estimated_time}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                {!artifactId && step.estimated_time && (
                                     <span className="text-xs text-gray-600 mt-1 inline-block">
                                         ~{step.estimated_time}
                                     </span>
