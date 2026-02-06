@@ -47,6 +47,7 @@ export const ARTIFACT_SCHEMAS: Record<string, z.ZodSchema> = {
 // SERIALIZABLE ARTIFACT (NO SCHEMA OBJECT)
 // ============================================================================
 
+// Internal type for store that doesn't include Zod schema (for serialization)
 interface SerializableArtifact {
     id: string;
     type: string;

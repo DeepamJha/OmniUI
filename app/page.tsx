@@ -8,6 +8,7 @@ import { ArtifactCanvas } from "@/components/artifacts/ArtifactRenderer";
 import { components } from "@/components/lib/tambo";
 import { detectCrossArtifactQuery, buildCrossArtifactContext } from "@/lib/artifacts/cross-artifact-reasoning";
 import { CreateMenu } from "@/components/CreateMenu";
+import { useNLPMutations } from "@/lib/artifacts/nlp-mutations";
 
 // Helper to extract text content from message
 function getMessageText(content: unknown): string {
@@ -169,6 +170,9 @@ export default function Home() {
   // Artifact system
   const artifactSystem = useArtifactSystem();
 
+  // NLP Mutations hook - enables local edits via natural language
+  const { attemptNLPMutation } = useNLPMutations();
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -263,6 +267,15 @@ export default function Home() {
   const handleGenerate = async () => {
     if (!taskInput.trim()) return;
     if (isIdle === false) return; // Wait for previous generation
+
+    // 🎯 0. NLP Mutation Check (Highest Priority - No AI Call!)
+    // This is the core differentiator: local edits via natural language
+    const nlpResult = attemptNLPMutation(taskInput);
+    if (nlpResult.success) {
+      console.log('⚡ NLP mutation applied locally:', nlpResult.action);
+      setTaskInput("");
+      return; // No AI call needed!
+    }
 
     // 🧠 1. Cross-Artifact Reasoning Check
     if (thread?.messages && thread.messages.length > 0) {
