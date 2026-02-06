@@ -62,7 +62,12 @@ Example uses:
                 z.object({
                     id: z.string().catch("o1").describe("Unique option ID"),
                     name: z.string().catch("Option").describe("Option name like MacBook Pro, Dell XPS"),
-                    scores: z.record(z.string(), z.number().min(1).max(10)).catch({}).describe("Scores per criterion ID"),
+                    scores: z.array(
+                        z.object({
+                            criterionId: z.string().describe("ID of the criterion this score is for"),
+                            score: z.number().min(1).max(10).catch(5).describe("Score 1-10"),
+                        })
+                    ).catch([]).describe("Scores for each criterion"),
                 })
             ).catch([]).describe("2-5 options to compare"),
             recommendation: z.string().optional().catch(undefined).describe("ID of recommended option"),

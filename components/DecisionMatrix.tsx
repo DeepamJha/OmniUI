@@ -11,7 +11,7 @@ type Criterion = {
 type Option = {
     id: string;
     name: string;
-    scores: Record<string, number>;
+    scores: { criterionId: string; score: number }[] | Record<string, number>;
 };
 
 export function DecisionMatrix({
@@ -34,10 +34,19 @@ export function DecisionMatrix({
     const safeCriteria = Array.isArray(criteria) ? criteria : [];
     const safeOptions = Array.isArray(options) ? options : [];
 
+    // Helper to get score - works with both array and record format
+    const getScore = (option: Option, criterionId: string): number => {
+        if (Array.isArray(option.scores)) {
+            const found = option.scores.find(s => s.criterionId === criterionId);
+            return found?.score ?? 5;
+        }
+        return option.scores?.[criterionId] ?? 5;
+    };
+
     // Calculate total score for an option
     const calculateTotal = (option: Option) => {
         return safeCriteria.reduce((sum, criterion) => {
-            const score = option.scores?.[criterion.id] || 0;
+            const score = getScore(option, criterion.id);
             return sum + score * (criterion.weight || 1);
         }, 0);
     };
@@ -152,7 +161,7 @@ export function DecisionMatrix({
                                         </div>
                                     </td>
                                     {safeCriteria.map((criterion) => {
-                                        const score = option.scores?.[criterion.id] || 5;
+                                        const score = getScore(option, criterion.id);
                                         const isEditing = editingCell?.optionId === option.id &&
                                             editingCell?.criterionId === criterion.id;
 

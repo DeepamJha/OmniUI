@@ -749,9 +749,18 @@ function DecisionMatrixContent({ state, artifactId }: { state: any; artifactId?:
     const safeCriteria = Array.isArray(state.criteria) ? state.criteria : [];
     const safeOptions = Array.isArray(state.options) ? state.options : [];
 
+    // Helper to get score - works with both array and record format
+    const getScore = (option: any, criterionId: string): number => {
+        if (Array.isArray(option.scores)) {
+            const found = option.scores.find((s: any) => s.criterionId === criterionId);
+            return found?.score ?? 5;
+        }
+        return option.scores?.[criterionId] ?? 5;
+    };
+
     const calculateTotal = (option: any) => {
         return safeCriteria.reduce((sum: number, criterion: any) => {
-            const score = option.scores?.[criterion.id] || 5;
+            const score = getScore(option, criterion.id);
             return sum + score * (criterion.weight || 1);
         }, 0);
     };
@@ -795,11 +804,23 @@ function DecisionMatrixContent({ state, artifactId }: { state: any; artifactId?:
         }
 
         const newOptions = [...safeOptions];
-        const oldScore = newOptions[optionIdx].scores?.[criterionId] || 5;
-        newOptions[optionIdx] = {
-            ...newOptions[optionIdx],
-            scores: { ...newOptions[optionIdx].scores, [criterionId]: editValue }
-        };
+        const oldScore = getScore(newOptions[optionIdx], criterionId);
+
+        // Update scores - use array format
+        if (Array.isArray(newOptions[optionIdx].scores)) {
+            const scoreIdx = newOptions[optionIdx].scores.findIndex((s: any) => s.criterionId === criterionId);
+            if (scoreIdx !== -1) {
+                newOptions[optionIdx].scores[scoreIdx] = { criterionId, score: editValue };
+            } else {
+                newOptions[optionIdx].scores.push({ criterionId, score: editValue });
+            }
+        } else {
+            // Fallback for record format
+            newOptions[optionIdx] = {
+                ...newOptions[optionIdx],
+                scores: { ...newOptions[optionIdx].scores, [criterionId]: editValue }
+            };
+        }
 
         const newState = { ...state, options: newOptions };
         updateArtifact(artifactId, newState);
@@ -862,7 +883,7 @@ function DecisionMatrixContent({ state, artifactId }: { state: any; artifactId?:
                                         </div>
                                     </td>
                                     {safeCriteria.map((criterion: any) => {
-                                        const score = option.scores?.[criterion.id] || 5;
+                                        const score = getScore(option, criterion.id);
                                         const isEditing = editingCell?.optionId === option.id && editingCell?.criterionId === criterion.id;
 
                                         return (
