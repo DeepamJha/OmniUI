@@ -14,6 +14,7 @@ import { CommandResultPanel } from "../CommandResultPanel";
 import { ExecutionPlan } from "../ExecutionPlan";
 import { SystemStatusPanel } from "../SystemStatusPanel";
 import { InteractiveFlowchart, interactiveFlowchartSchema } from "../InteractiveFlowchart";
+import { DecisionMatrix } from "../DecisionMatrix";
 
 /**
  * OmniUI Component Registry
@@ -22,6 +23,52 @@ import { InteractiveFlowchart, interactiveFlowchartSchema } from "../Interactive
  * Each has a narrow scope - prefer plain text for casual chat.
  */
 export const components: TamboComponent[] = [
+    // DECISION MATRIX - for comparing options with criteria
+    {
+        name: "DecisionMatrix",
+        description: `
+**USE THIS COMPONENT** when the user wants to:
+- Compare multiple options with weighted criteria
+- Make a decision between alternatives
+- Evaluate choices with scores
+- Create a comparison matrix or table
+- Choose between products, tools, approaches
+
+Trigger words: "compare", "decide", "choose", "options", "versus", "vs", "which is better", "pros and cons", "evaluate", "matrix"
+
+This renders an INTERACTIVE comparison table with:
+- Options as rows
+- Criteria as columns with weights (importance)
+- Editable scores (1-10)
+- Auto-calculated totals
+- Highlighted recommendation
+
+Example uses:
+- "Compare 3 laptop options"
+- "Help me decide between React, Vue, and Angular"
+- "Create a decision matrix for choosing a database"
+`,
+        component: DecisionMatrix,
+        propsSchema: z.object({
+            question: z.string().catch("Decision to Make").describe("The decision question or comparison title"),
+            criteria: z.array(
+                z.object({
+                    id: z.string().catch("c1").describe("Unique criterion ID"),
+                    name: z.string().catch("Criterion").describe("Name like Price, Performance, Ease of Use"),
+                    weight: z.number().min(1).max(10).catch(5).describe("Importance weight 1-10"),
+                })
+            ).catch([]).describe("3-6 criteria for comparison"),
+            options: z.array(
+                z.object({
+                    id: z.string().catch("o1").describe("Unique option ID"),
+                    name: z.string().catch("Option").describe("Option name like MacBook Pro, Dell XPS"),
+                    scores: z.record(z.string(), z.number().min(1).max(10)).catch({}).describe("Scores per criterion ID"),
+                })
+            ).catch([]).describe("2-5 options to compare"),
+            recommendation: z.string().optional().catch(undefined).describe("ID of recommended option"),
+        }),
+    },
+
     // RESULT COMPONENT - for completed analysis/tasks
     {
         name: "CommandResultPanel",

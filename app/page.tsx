@@ -33,6 +33,8 @@ const ARTIFACT_COMPONENT_NAMES = new Set([
   'CommandResultPanel',
   'ExecutionPlan',
   'SystemStatusPanel',
+  'DecisionMatrix',
+  'InteractiveFlowchart',
 ]);
 
 /**
@@ -251,8 +253,9 @@ export default function Home() {
 
   const demoPrompts = [
     { label: "Create a 5-step deployment plan", icon: "📋" },
+    { label: "Compare React vs Vue vs Angular", icon: "⚖️" },
     { label: "Show system status with CPU and memory", icon: "📊" },
-    { label: "Analyze the codebase quality", icon: "⚡" },
+    { label: "Create a CI/CD pipeline flowchart", icon: "🔀" },
   ];
 
   const handleGenerate = async () => {
