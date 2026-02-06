@@ -14,6 +14,7 @@ import { CommandResultPanel } from "../CommandResultPanel";
 import { ExecutionPlan } from "../ExecutionPlan";
 import { SystemStatusPanel } from "../SystemStatusPanel";
 import { InteractiveFlowchart, interactiveFlowchartSchema } from "../InteractiveFlowchart";
+import { KanbanBoard, kanbanBoardSchema } from "../KanbanBoard";
 
 /**
  * OmniUI Component Registry
@@ -46,7 +47,7 @@ This represents the END STATE of completed work.
             title: z.string().catch("Analysis Complete").describe("Short title of what was analyzed/completed"),
             status: z.string().catch("success").describe("Overall outcome - success, warning, or error"),
             summary: z.string().catch("Analysis completed successfully.").describe("One paragraph explaining the key finding or outcome"),
-            items: z.array(z.string().catch("")).catch([]).describe("3-5 bullet points of specific findings or results"),
+            details: z.array(z.string().catch("")).catch([]).describe("3-5 bullet points of specific findings or results"),
         }),
     },
 
@@ -138,6 +139,36 @@ Do NOT use CommandResultPanel or ExecutionPlan for flowchart/diagram requests.
 `,
         component: InteractiveFlowchart,
         propsSchema: interactiveFlowchartSchema,
+    },
+
+    // KANBAN BOARD COMPONENT - for task management & workflow
+    {
+        name: "KanbanBoard",
+        description: `
+Use when the user wants to:
+- Track tasks visually with drag-and-drop
+- Organize work into columns (To Do, In Progress, Done, Review)
+- Manage a project backlog or sprint board
+- Visualize workflow states with status progression
+- Assign tasks and track progress
+
+Perfect for: Agile workflows, sprint planning, task management, project tracking, workflow automation.
+
+Do NOT use for:
+- Just listing tasks (use CommandResultPanel)
+- Creating plans (use ExecutionPlan)
+- Showing metrics or status (use SystemStatusPanel)
+
+This component provides INTERACTIVE task board with:
+- Drag-and-drop between columns
+- Priority levels (low, medium, high, critical)
+- Assignees with avatars
+- Due dates and tags
+- Real-time updates
+- Modal dialogs for task creation/editing
+`,
+        component: KanbanBoard,
+        propsSchema: kanbanBoardSchema,
     },
 ];
 

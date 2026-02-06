@@ -91,8 +91,8 @@ function TaskCard({ task, columnColor }: { task: Task; columnColor: string }) {
                 group relative bg-gray-900/60 backdrop-blur-sm rounded-xl p-4 
                 border border-white/10 hover:border-white/20
                 cursor-grab active:cursor-grabbing
-                transition-all duration-200
-                ${isDragging ? 'opacity-50 ring-2 ring-teal-500/50' : 'hover:shadow-lg hover:shadow-black/20 hover:-translate-y-1'}
+                transition-[transform,box-shadow,border-color,opacity] duration-150
+                ${isDragging ? 'opacity-70 ring-1 ring-teal-400/40' : 'hover:shadow-md hover:shadow-black/10 hover:-translate-y-0.5'}
             `}
         >
             {/* Priority indicator */}
@@ -355,7 +355,7 @@ export function KanbanBoard({ title, columns }: KanbanBoardProps) {
                     {/* Drag overlay */}
                     <DragOverlay>
                         {activeTask && activeColumn ? (
-                            <div className="rotate-3 scale-105 shadow-2xl">
+                            <div className="scale-[1.02] shadow-xl">
                                 <TaskCard task={activeTask} columnColor={activeColumn.color} />
                             </div>
                         ) : null}
