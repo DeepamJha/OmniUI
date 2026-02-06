@@ -14,6 +14,7 @@ import { CommandResultPanel } from "../CommandResultPanel";
 import { ExecutionPlan } from "../ExecutionPlan";
 import { SystemStatusPanel } from "../SystemStatusPanel";
 import { InteractiveFlowchart, interactiveFlowchartSchema } from "../InteractiveFlowchart";
+import { DecisionMatrix } from "../DecisionMatrix";
 
 /**
  * OmniUI Component Registry
@@ -22,6 +23,62 @@ import { InteractiveFlowchart, interactiveFlowchartSchema } from "../Interactive
  * Each has a narrow scope - prefer plain text for casual chat.
  */
 export const components: TamboComponent[] = [
+    // DECISION MATRIX - for comparing options with criteria
+    {
+        name: "DecisionMatrix",
+        description: `
+**USE THIS COMPONENT** when the user wants to:
+- Compare multiple options with weighted criteria
+- Make a decision between alternatives
+- Evaluate choices with scores
+- Create a comparison matrix or table
+- Choose between products, tools, approaches
+
+Trigger words: "compare", "decide", "choose", "options", "versus", "vs", "which is better", "pros and cons", "evaluate", "matrix"
+
+This renders an INTERACTIVE comparison table with editable scores (1-10), weights, and auto-calculated totals.
+
+ALWAYS populate criteria and options with real data. Example for "Compare React vs Vue vs Angular":
+{
+  "question": "Which frontend framework should you use?",
+  "criteria": [
+    { "id": "c1", "name": "Learning Curve", "weight": 7 },
+    { "id": "c2", "name": "Performance", "weight": 8 },
+    { "id": "c3", "name": "Ecosystem", "weight": 6 }
+  ],
+  "options": [
+    { "id": "o1", "name": "React", "scores": [{ "criterionId": "c1", "score": 6 }, { "criterionId": "c2", "score": 8 }, { "criterionId": "c3", "score": 9 }] },
+    { "id": "o2", "name": "Vue", "scores": [{ "criterionId": "c1", "score": 8 }, { "criterionId": "c2", "score": 8 }, { "criterionId": "c3", "score": 7 }] },
+    { "id": "o3", "name": "Angular", "scores": [{ "criterionId": "c1", "score": 4 }, { "criterionId": "c2", "score": 7 }, { "criterionId": "c3", "score": 8 }] }
+  ]
+}
+`,
+        component: DecisionMatrix,
+        propsSchema: z.object({
+            question: z.string().catch("Decision to Make").describe("The decision question or comparison title"),
+            criteria: z.array(
+                z.object({
+                    id: z.string().catch("c1").describe("Unique criterion ID"),
+                    name: z.string().catch("Criterion").describe("Name like Price, Performance, Ease of Use"),
+                    weight: z.number().min(1).max(10).catch(5).describe("Importance weight 1-10"),
+                })
+            ).catch([]).describe("3-6 criteria for comparison"),
+            options: z.array(
+                z.object({
+                    id: z.string().catch("o1").describe("Unique option ID"),
+                    name: z.string().catch("Option").describe("Option name like MacBook Pro, Dell XPS"),
+                    scores: z.array(
+                        z.object({
+                            criterionId: z.string().describe("ID of the criterion this score is for"),
+                            score: z.number().min(1).max(10).catch(5).describe("Score 1-10"),
+                        })
+                    ).catch([]).describe("Scores for each criterion"),
+                })
+            ).catch([]).describe("2-5 options to compare"),
+            recommendation: z.string().optional().catch(undefined).describe("ID of recommended option"),
+        }),
+    },
+
     // RESULT COMPONENT - for completed analysis/tasks
     {
         name: "CommandResultPanel",

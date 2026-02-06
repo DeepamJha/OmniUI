@@ -362,24 +362,82 @@ function ArtifactContent({ artifact }: { artifact: Artifact }) {
 
     switch (type) {
         case 'CommandResultPanel':
-            return <CommandResultContent state={state} />;
+            return <CommandResultContent state={state} artifactId={id} />;
         case 'ExecutionPlan':
             return <ExecutionPlanContent state={state} artifactId={id} />;
         case 'SystemStatusPanel':
             return <SystemStatusContent state={state} />;
+        case 'DecisionMatrix':
+            return <DecisionMatrixContent state={state} artifactId={id} />;
+        case 'InteractiveFlowchart':
+            return <FlowchartContent state={state} />;
         default:
             return <GenericContent state={state} />;
     }
 }
 
-/**
- * Command Result Panel rendering
- */
-function CommandResultContent({ state }: { state: any }) {
+function CommandResultContent({ state, artifactId }: { state: any; artifactId?: string }) {
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [editTitleValue, setEditTitleValue] = useState(state.title || '');
+    const updateArtifact = useArtifactStore((state) => state.updateArtifact);
+    const addMutation = useArtifactStore((state) => state.addMutation);
+
+    const handleTitleSave = () => {
+        if (!artifactId || editTitleValue === state.title) {
+            setIsEditingTitle(false);
+            return;
+        }
+
+        const newState = { ...state, title: editTitleValue };
+        updateArtifact(artifactId, newState);
+        addMutation({
+            artifactId,
+            operation: 'update_property',
+            path: ['title'],
+            value: editTitleValue,
+            previousValue: state.title,
+            source: 'user',
+            reason: 'Edited title',
+        });
+        setIsEditingTitle(false);
+    };
+
     return (
-        <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm">
+        <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm group">
+            {/* Title with edit */}
             {state.title && (
-                <h3 className="text-xl font-semibold text-white mb-4">{state.title}</h3>
+                <div className="flex items-center gap-2 mb-4">
+                    {isEditingTitle ? (
+                        <input
+                            type="text"
+                            value={editTitleValue}
+                            onChange={(e) => setEditTitleValue(e.target.value)}
+                            onBlur={handleTitleSave}
+                            onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
+                            className="flex-1 text-xl font-semibold text-white bg-white/5 border border-blue-500/30 rounded-lg px-3 py-1 focus:outline-none focus:border-blue-500"
+                            autoFocus
+                        />
+                    ) : (
+                        <h3
+                            className={`text-xl font-semibold text-white flex-1 ${artifactId ? 'cursor-pointer hover:bg-white/5 rounded px-2 py-1 -mx-2 transition-colors' : ''}`}
+                            onClick={() => artifactId && setIsEditingTitle(true)}
+                            title={artifactId ? "Click to edit title" : undefined}
+                        >
+                            {state.title}
+                        </h3>
+                    )}
+                    {artifactId && !isEditingTitle && (
+                        <button
+                            onClick={() => setIsEditingTitle(true)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-400 transition-all p-1"
+                            title="Edit title"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
             )}
 
             {state.summary && (
@@ -397,11 +455,30 @@ function CommandResultContent({ state }: { state: any }) {
                 </div>
             )}
 
+            {/* Show items if present (from schema) */}
+            {state.items && state.items.length > 0 && (
+                <div className="space-y-2 mt-4">
+                    {state.items.map((item: string, i: number) => (
+                        <div key={i} className="flex items-start gap-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
+                            <p className="text-gray-400">{item}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {state.recommendation && (
                 <div className="mt-6 pt-6 border-t border-white/5">
                     <p className="text-sm text-gray-500 mb-2">Recommendation</p>
                     <p className="text-white">{state.recommendation}</p>
                 </div>
+            )}
+
+            {/* Inline edit hint */}
+            {artifactId && (
+                <p className="text-xs text-gray-600 mt-4 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    💡 Click title to edit
+                </p>
             )}
         </div>
     );
@@ -492,8 +569,21 @@ function ExecutionPlanContent({ state, artifactId, onEdit }: {
                 <h3 className="text-xl font-semibold text-white mb-2">{state.title}</h3>
             )}
 
+            {/* Show goal if present */}
+            {state.goal && (
+                <p className="text-gray-400 mb-4">{state.goal}</p>
+            )}
+
             {state.objective && (
                 <p className="text-gray-400 mb-6">{state.objective}</p>
+            )}
+
+            {/* Empty state when no steps */}
+            {(!state.steps || state.steps.length === 0) && (
+                <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No steps defined yet.</p>
+                    <p className="text-xs mt-1">The AI may still be generating content...</p>
+                </div>
             )}
 
             {state.steps && state.steps.length > 0 && (
@@ -648,6 +738,262 @@ function SystemStatusContent({ state }: { state: any }) {
 }
 
 /**
+ * Decision Matrix rendering with editable cells
+ */
+function DecisionMatrixContent({ state, artifactId }: { state: any; artifactId?: string }) {
+    const [editingCell, setEditingCell] = useState<{ optionId: string; criterionId: string } | null>(null);
+    const [editValue, setEditValue] = useState<number>(5);
+    const updateArtifact = useArtifactStore((state) => state.updateArtifact);
+    const addMutation = useArtifactStore((state) => state.addMutation);
+
+    const safeCriteria = Array.isArray(state.criteria) ? state.criteria : [];
+    const safeOptions = Array.isArray(state.options) ? state.options : [];
+
+    // Helper to get score - works with both array and record format
+    const getScore = (option: any, criterionId: string): number => {
+        if (Array.isArray(option.scores)) {
+            const found = option.scores.find((s: any) => s.criterionId === criterionId);
+            return found?.score ?? 5;
+        }
+        return option.scores?.[criterionId] ?? 5;
+    };
+
+    const calculateTotal = (option: any) => {
+        return safeCriteria.reduce((sum: number, criterion: any) => {
+            const score = getScore(option, criterion.id);
+            return sum + score * (criterion.weight || 1);
+        }, 0);
+    };
+
+    const getRecommendedId = () => {
+        if (state.recommendation) return state.recommendation;
+        if (safeOptions.length === 0) return null;
+
+        let maxScore = -1;
+        let maxId = safeOptions[0]?.id;
+
+        safeOptions.forEach((opt: any) => {
+            const total = calculateTotal(opt);
+            if (total > maxScore) {
+                maxScore = total;
+                maxId = opt.id;
+            }
+        });
+
+        return maxId;
+    };
+
+    const recommendedId = getRecommendedId();
+
+    const getScoreColor = (score: number) => {
+        if (score >= 8) return "text-green-400 bg-green-500/20";
+        if (score >= 5) return "text-yellow-400 bg-yellow-500/20";
+        return "text-red-400 bg-red-500/20";
+    };
+
+    const handleScoreSave = (optionId: string, criterionId: string) => {
+        if (!artifactId) {
+            setEditingCell(null);
+            return;
+        }
+
+        const optionIdx = safeOptions.findIndex((o: any) => o.id === optionId);
+        if (optionIdx === -1) {
+            setEditingCell(null);
+            return;
+        }
+
+        const newOptions = [...safeOptions];
+        const oldScore = getScore(newOptions[optionIdx], criterionId);
+
+        // Update scores - use array format
+        if (Array.isArray(newOptions[optionIdx].scores)) {
+            const scoreIdx = newOptions[optionIdx].scores.findIndex((s: any) => s.criterionId === criterionId);
+            if (scoreIdx !== -1) {
+                newOptions[optionIdx].scores[scoreIdx] = { criterionId, score: editValue };
+            } else {
+                newOptions[optionIdx].scores.push({ criterionId, score: editValue });
+            }
+        } else {
+            // Fallback for record format
+            newOptions[optionIdx] = {
+                ...newOptions[optionIdx],
+                scores: { ...newOptions[optionIdx].scores, [criterionId]: editValue }
+            };
+        }
+
+        const newState = { ...state, options: newOptions };
+        updateArtifact(artifactId, newState);
+        addMutation({
+            artifactId,
+            operation: 'update_item',
+            path: ['options', optionIdx.toString(), 'scores', criterionId],
+            value: editValue,
+            previousValue: oldScore,
+            source: 'user',
+            reason: `Changed score to ${editValue}`,
+        });
+        setEditingCell(null);
+    };
+
+    if (safeCriteria.length === 0 && safeOptions.length === 0) {
+        return (
+            <div className="border border-purple-500/20 rounded-xl p-6 bg-gradient-to-br from-purple-500/5 to-transparent">
+                <h3 className="text-lg font-semibold text-white mb-2">⚖️ {state.question || 'Decision Matrix'}</h3>
+                <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">Loading decision matrix...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="border border-purple-500/20 rounded-xl p-6 bg-gradient-to-br from-purple-500/5 to-transparent">
+            <h3 className="text-lg font-semibold text-white mb-4">⚖️ {state.question || 'Decision Matrix'}</h3>
+
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="border-b border-white/10">
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium">Option</th>
+                            {safeCriteria.map((criterion: any) => (
+                                <th key={criterion.id} className="text-center py-3 px-2 text-gray-400 font-medium min-w-[100px]">
+                                    <div className="flex flex-col items-center gap-1">
+                                        <span>{criterion.name}</span>
+                                        <span className="text-xs text-purple-400">×{criterion.weight || 5}</span>
+                                    </div>
+                                </th>
+                            ))}
+                            <th className="text-center py-3 px-2 text-white font-semibold bg-white/5 rounded-t-lg">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {safeOptions.map((option: any) => {
+                            const total = calculateTotal(option);
+                            const isRecommended = option.id === recommendedId;
+
+                            return (
+                                <tr key={option.id} className={`border-b border-white/5 ${isRecommended ? 'bg-green-500/10' : 'hover:bg-white/5'}`}>
+                                    <td className="py-3 px-2">
+                                        <div className="flex items-center gap-2">
+                                            {isRecommended && <span className="text-green-400">✓</span>}
+                                            <span className={`font-medium ${isRecommended ? 'text-green-300' : 'text-white'}`}>
+                                                {option.name}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    {safeCriteria.map((criterion: any) => {
+                                        const score = getScore(option, criterion.id);
+                                        const isEditing = editingCell?.optionId === option.id && editingCell?.criterionId === criterion.id;
+
+                                        return (
+                                            <td key={criterion.id} className="text-center py-3 px-2">
+                                                {isEditing ? (
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max="10"
+                                                        value={editValue}
+                                                        onChange={(e) => setEditValue(parseInt(e.target.value) || 5)}
+                                                        onBlur={() => handleScoreSave(option.id, criterion.id)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleScoreSave(option.id, criterion.id)}
+                                                        className="w-12 text-center bg-purple-500/20 border border-purple-500 rounded px-1 py-0.5 text-white focus:outline-none"
+                                                        autoFocus
+                                                    />
+                                                ) : (
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingCell({ optionId: option.id, criterionId: criterion.id });
+                                                            setEditValue(score);
+                                                        }}
+                                                        className={`w-8 h-8 rounded-lg ${getScoreColor(score)} font-semibold hover:ring-2 hover:ring-purple-500/50 transition-all`}
+                                                    >
+                                                        {score}
+                                                    </button>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="text-center py-3 px-2">
+                                        <span className={`font-bold text-lg ${isRecommended ? 'text-green-400' : 'text-white'}`}>
+                                            {total.toFixed(0)}
+                                        </span>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            <p className="text-xs text-gray-600 mt-4 text-center">
+                💡 Click any score to edit • Total = Σ(score × weight)
+            </p>
+        </div>
+    );
+}
+
+/**
+ * Flowchart rendering (simplified - uses InteractiveFlowchart component)
+ */
+function FlowchartContent({ state }: { state: any }) {
+    const safeNodes = Array.isArray(state.nodes) ? state.nodes : [];
+    const safeEdges = Array.isArray(state.edges) ? state.edges : [];
+
+    const getNodeColor = (type: string) => {
+        switch (type) {
+            case 'start': return 'bg-green-500/20 border-green-500/40 text-green-400';
+            case 'end': return 'bg-red-500/20 border-red-500/40 text-red-400';
+            case 'decision': return 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400';
+            default: return 'bg-blue-500/20 border-blue-500/40 text-blue-400';
+        }
+    };
+
+    if (safeNodes.length === 0) {
+        return (
+            <div className="border border-blue-500/20 rounded-xl p-6 bg-gradient-to-br from-blue-500/5 to-transparent">
+                <h3 className="text-lg font-semibold text-white mb-2">🔀 {state.title || 'Flowchart'}</h3>
+                <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">Loading flowchart...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="border border-blue-500/20 rounded-xl p-6 bg-gradient-to-br from-blue-500/5 to-transparent">
+            <h3 className="text-lg font-semibold text-white mb-4">🔀 {state.title || 'Flowchart'}</h3>
+
+            <div className="space-y-2">
+                {safeNodes.map((node: any, i: number) => (
+                    <div key={node.id || i} className="flex items-center gap-3">
+                        <div className={`px-4 py-2 rounded-lg border ${getNodeColor(node.type)}`}>
+                            {node.label || node.id}
+                        </div>
+                        {i < safeNodes.length - 1 && (
+                            <span className="text-gray-500">→</span>
+                        )}
+                    </div>
+                ))}
+            </div>
+
+            {safeEdges.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/10">
+                    <p className="text-xs text-gray-500 mb-2">Connections:</p>
+                    <div className="flex flex-wrap gap-2">
+                        {safeEdges.map((edge: any, i: number) => (
+                            <span key={i} className="text-xs bg-white/5 px-2 py-1 rounded text-gray-400">
+                                {edge.source} → {edge.target} {edge.label && `(${edge.label})`}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/**
  * Generic fallback for unknown artifact types
  */
 function GenericContent({ state }: { state: any }) {
@@ -659,3 +1005,4 @@ function GenericContent({ state }: { state: any }) {
         </div>
     );
 }
+

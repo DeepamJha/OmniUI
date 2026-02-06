@@ -41,12 +41,49 @@ export const ARTIFACT_SCHEMAS: Record<string, z.ZodSchema> = {
         ).default([]),
         metrics: z.record(z.string(), z.string()).optional(),
     }),
+
+    DecisionMatrix: z.object({
+        question: z.string().default(''),
+        criteria: z.array(
+            z.object({
+                id: z.string(),
+                name: z.string(),
+                weight: z.number().default(5),
+            })
+        ).default([]),
+        options: z.array(
+            z.object({
+                id: z.string(),
+                name: z.string(),
+                scores: z.array(z.object({
+                    criterionId: z.string(),
+                    score: z.number().default(5),
+                })).default([]), // Using array format for compatibility
+            })
+        ).default([]),
+        recommendation: z.string().optional(),
+    }),
+
+    InteractiveFlowchart: z.object({
+        nodes: z.array(z.object({
+            id: z.string(),
+            position: z.object({ x: z.number(), y: z.number() }).optional(),
+            data: z.object({ label: z.string() }).optional(),
+            type: z.string().optional(),
+        })).default([]),
+        edges: z.array(z.object({
+            id: z.string(),
+            source: z.string(),
+            target: z.string(),
+        })).default([]),
+    }),
 };
 
 // ============================================================================
 // SERIALIZABLE ARTIFACT (NO SCHEMA OBJECT)
 // ============================================================================
 
+// Internal type for store that doesn't include Zod schema (for serialization)
 interface SerializableArtifact {
     id: string;
     type: string;

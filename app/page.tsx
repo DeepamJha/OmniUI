@@ -7,6 +7,8 @@ import { useArtifactSystem } from "@/lib/hooks/use-artifact-system";
 import { ArtifactCanvas } from "@/components/artifacts/ArtifactRenderer";
 import { components } from "@/components/lib/tambo";
 import { detectCrossArtifactQuery, buildCrossArtifactContext } from "@/lib/artifacts/cross-artifact-reasoning";
+import { CreateMenu } from "@/components/CreateMenu";
+import { useNLPMutations } from "@/lib/artifacts/nlp-mutations";
 
 // Helper to extract text content from message
 function getMessageText(content: unknown): string {
@@ -33,6 +35,8 @@ const ARTIFACT_COMPONENT_NAMES = new Set([
   'CommandResultPanel',
   'ExecutionPlan',
   'SystemStatusPanel',
+  'DecisionMatrix',
+  'InteractiveFlowchart',
 ]);
 
 /**
@@ -153,6 +157,7 @@ function MessageComponent({
 export default function Home() {
   const [taskInput, setTaskInput] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const processedMessageIds = useRef<Set<string>>(new Set());
 
   // Tambo thread hook - provides the current thread context
@@ -164,6 +169,9 @@ export default function Home() {
 
   // Artifact system
   const artifactSystem = useArtifactSystem();
+
+  // NLP Mutations hook - enables local edits via natural language
+  const { attemptNLPMutation } = useNLPMutations();
 
   useEffect(() => {
     setMounted(true);
@@ -250,14 +258,24 @@ export default function Home() {
   }, [artifactSystem]);
 
   const demoPrompts = [
-    { label: "Analyze system health", icon: "📊" },
-    { label: "Create a deployment plan", icon: "📋" },
-    { label: "Review code quality", icon: "⚡" },
+    { label: "Create a 5-step deployment plan", icon: "📋" },
+    { label: "Compare React vs Vue vs Angular", icon: "⚖️" },
+    { label: "Show system status with CPU and memory", icon: "📊" },
+    { label: "Create a CI/CD pipeline flowchart", icon: "🔀" },
   ];
 
   const handleGenerate = async () => {
     if (!taskInput.trim()) return;
     if (isIdle === false) return; // Wait for previous generation
+
+    // 🎯 0. NLP Mutation Check (Highest Priority - No AI Call!)
+    // This is the core differentiator: local edits via natural language
+    const nlpResult = attemptNLPMutation(taskInput);
+    if (nlpResult.success) {
+      console.log('⚡ NLP mutation applied locally:', nlpResult.action);
+      setTaskInput("");
+      return; // No AI call needed!
+    }
 
     // 🧠 1. Cross-Artifact Reasoning Check
     if (thread?.messages && thread.messages.length > 0) {
@@ -468,8 +486,17 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Demo Prompt Pills */}
+        {/* Demo Prompt Pills + Create Button */}
         <div className="flex flex-wrap gap-2 justify-center mb-10 md:mb-14">
+          {/* Create New Button */}
+          <button
+            onClick={() => setShowCreateMenu(true)}
+            className="group flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 text-sm text-indigo-300 hover:text-white hover:border-indigo-400/50 hover:from-indigo-500/30 hover:to-purple-500/30 transition-all duration-300"
+          >
+            <span className="text-lg">✨</span>
+            Create New
+          </button>
+
           {demoPrompts.map((prompt, i) => (
             <button
               key={prompt.label}
@@ -484,6 +511,17 @@ export default function Home() {
             </button>
           ))}
         </div>
+
+        {/* Create Menu Modal */}
+        <CreateMenu
+          isOpen={showCreateMenu}
+          onClose={() => setShowCreateMenu(false)}
+          onSubmit={(prompt) => {
+            setTaskInput(prompt);
+            setShowCreateMenu(false);
+          }}
+          isLoading={isGenerating}
+        />
 
         {/* Workspace Container */}
         <div className="w-full max-w-4xl flex-1">
