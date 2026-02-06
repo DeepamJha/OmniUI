@@ -306,6 +306,7 @@ Analyze the above artifacts to answer the user's question.`;
 
         // Operations
         createArtifact,
+        addArtifact: store.addArtifact,
         updateArtifact: store.updateArtifact,
         deleteArtifact: store.deleteArtifact,
         getArtifact: store.getArtifact,

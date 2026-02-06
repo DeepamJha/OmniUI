@@ -72,19 +72,19 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-[color:var(--background)] flex items-center justify-center p-4">
             <div className="w-full max-w-md">
                 {/* Logo/Brand */}
                 <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    <h1 className="text-4xl font-bold bg-gradient-to-r from-teal-500 to-amber-500 bg-clip-text text-transparent">
                         OmniUI
                     </h1>
-                    <p className="text-gray-400 mt-2">Stateful AI Workspace</p>
+                    <p className="text-zinc-600 mt-2">Stateful AI Workspace</p>
                 </div>
 
                 {/* Auth Card */}
-                <div className="bg-gray-800/50 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-8 shadow-2xl">
-                    <h2 className="text-2xl font-semibold text-white mb-6 text-center">
+                <div className="bg-white/80 backdrop-blur-xl border border-black/10 rounded-2xl p-8 shadow-2xl">
+                    <h2 className="text-2xl font-semibold text-zinc-900 mb-6 text-center">
                         {mode === 'login' ? 'Welcome back' : 'Create account'}
                     </h2>
 
@@ -93,7 +93,7 @@ export default function LoginPage() {
                         <button
                             onClick={handleGithubLogin}
                             disabled={isLoading}
-                            className="w-full flex items-center justify-center gap-3 bg-gray-700 hover:bg-gray-600 
+                            className="w-full flex items-center justify-center gap-3 bg-zinc-900 hover:bg-zinc-800 
                          text-white py-3 px-4 rounded-xl transition-all duration-200
                          disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -106,8 +106,8 @@ export default function LoginPage() {
                         <button
                             onClick={handleGoogleLogin}
                             disabled={isLoading}
-                            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 
-                         text-gray-800 py-3 px-4 rounded-xl transition-all duration-200
+                            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-zinc-100 
+                         text-zinc-800 py-3 px-4 rounded-xl transition-all duration-200
                          disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -123,10 +123,10 @@ export default function LoginPage() {
                     {/* Divider */}
                     <div className="relative my-6">
                         <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-600"></div>
+                            <div className="w-full border-t border-zinc-200"></div>
                         </div>
                         <div className="relative flex justify-center text-sm">
-                            <span className="px-4 bg-gray-800/50 text-gray-400">or continue with email</span>
+                            <span className="px-4 bg-white/80 text-zinc-500">or continue with email</span>
                         </div>
                     </div>
 
@@ -139,8 +139,8 @@ export default function LoginPage() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
-                                className="w-full bg-gray-700/50 border border-gray-600 rounded-xl px-4 py-3 
-                           text-white placeholder-gray-400 focus:outline-none focus:border-blue-500
+                                className="w-full bg-white border border-zinc-200 rounded-xl px-4 py-3 
+                           text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-teal-500
                            transition-colors"
                             />
                         </div>
@@ -152,8 +152,8 @@ export default function LoginPage() {
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
                                 minLength={6}
-                                className="w-full bg-gray-700/50 border border-gray-600 rounded-xl px-4 py-3 
-                           text-white placeholder-gray-400 focus:outline-none focus:border-blue-500
+                                className="w-full bg-white border border-zinc-200 rounded-xl px-4 py-3 
+                           text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-teal-500
                            transition-colors"
                             />
                         </div>
@@ -165,20 +165,20 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700
+                            className="w-full bg-gradient-to-r from-teal-500 to-amber-500 hover:from-teal-600 hover:to-amber-600
                          text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200
-                         disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25"
+                         disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-teal-500/25"
                         >
                             {isLoading ? 'Loading...' : (mode === 'login' ? 'Sign In' : 'Sign Up')}
                         </button>
                     </form>
 
                     {/* Toggle Mode */}
-                    <p className="text-center text-gray-400 mt-6">
+                    <p className="text-center text-zinc-600 mt-6">
                         {mode === 'login' ? "Don't have an account? " : "Already have an account? "}
                         <button
                             onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-                            className="text-blue-400 hover:text-blue-300 font-medium"
+                            className="text-teal-600 hover:text-teal-500 font-medium"
                         >
                             {mode === 'login' ? 'Sign up' : 'Sign in'}
                         </button>
@@ -186,7 +186,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* Footer */}
-                <p className="text-center text-gray-500 text-sm mt-6">
+                <p className="text-center text-zinc-500 text-sm mt-6">
                     Powered by Supabase Auth
                 </p>
             </div>

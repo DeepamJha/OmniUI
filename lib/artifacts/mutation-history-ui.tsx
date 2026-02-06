@@ -29,7 +29,7 @@ export function MutationHistory({ artifactId }: { artifactId: string }) {
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-purple-400" />
+                    <div className="w-2 h-2 rounded-full bg-teal-300" />
                     <span className="text-sm font-medium text-white">History</span>
                     <span className="text-xs text-gray-500">v{artifact.version}</span>
                 </div>
@@ -103,10 +103,10 @@ function MutationItem({
     };
 
     return (
-        <div className={`flex gap-3 p-2 rounded ${isLatest ? 'bg-purple-500/10' : 'bg-white/[0.02]'}`}>
+        <div className={`flex gap-3 p-2 rounded ${isLatest ? 'bg-teal-500/10' : 'bg-white/[0.02]'}`}>
             {/* Timeline dot */}
             <div className="flex flex-col items-center">
-                <div className={`w-2 h-2 rounded-full ${isLatest ? 'bg-purple-400' : 'bg-gray-600'}`} />
+                <div className={`w-2 h-2 rounded-full ${isLatest ? 'bg-teal-300' : 'bg-gray-600'}`} />
                 {!isLatest && <div className="w-px h-full bg-gray-700 mt-1" />}
             </div>
 
@@ -120,7 +120,7 @@ function MutationItem({
                         {getSourceIcon(mutation.source)}
                     </span>
                     {isLatest && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-200">
                             Latest
                         </span>
                     )}
@@ -241,7 +241,7 @@ export function VersionBadge({ artifactId }: { artifactId: string }) {
             <button
                 onMouseEnter={() => setShowTooltip(true)}
                 onMouseLeave={() => setShowTooltip(false)}
-                className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 transition-colors"
+                className="text-xs px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-200 hover:bg-teal-500/30 transition-colors"
             >
                 v{artifact.version}
             </button>

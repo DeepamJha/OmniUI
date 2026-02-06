@@ -75,7 +75,7 @@ const CustomNode = ({ data, selected }: NodeProps) => {
         };
 
         return {
-            className: `${baseStyle} ${statusColors[nodeData.status] || statusColors.pending} ${selected ? 'ring-4 ring-purple-500/50' : ''}`,
+            className: `${baseStyle} ${statusColors[nodeData.status] || statusColors.pending} ${selected ? 'ring-4 ring-teal-500/50' : ''}`,
             icon: typeIcons[nodeData.type] || '⚙️',
         };
     };
@@ -92,7 +92,7 @@ const CustomNode = ({ data, selected }: NodeProps) => {
                 <Handle
                     type="target"
                     position={Position.Top}
-                    className="!bg-purple-500 !w-3 !h-3 !border-2 !border-purple-300"
+                    className="!bg-teal-500 !w-3 !h-3 !border-2 !border-teal-300"
                 />
             )}
 
@@ -116,7 +116,7 @@ const CustomNode = ({ data, selected }: NodeProps) => {
                 <Handle
                     type="source"
                     position={Position.Bottom}
-                    className="!bg-purple-500 !w-3 !h-3 !border-2 !border-purple-300"
+                    className="!bg-teal-500 !w-3 !h-3 !border-2 !border-teal-300"
                 />
             )}
         </div>
@@ -190,7 +190,7 @@ export function InteractiveFlowchart({ title, nodes: inputNodes, edges: inputEdg
             <div className="px-5 py-4 border-b border-gray-700/50 bg-gray-800/30">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
+                        <div className="p-2 rounded-lg bg-teal-500/20 text-teal-300">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                             </svg>

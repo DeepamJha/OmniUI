@@ -5,15 +5,17 @@ import { useArtifactStore, useArtifactHydration } from '@/lib/artifacts/store';
 import type { Artifact, Mutation } from '@/lib/artifacts/types';
 import { EditableSelect } from '@/lib/artifacts/inline-editing';
 import { ArtifactActionsPanel, generateArtifactActions } from '@/lib/artifacts/artifact-actions';
+import { KanbanBoard } from '@/components/KanbanBoard';
 
 interface ArtifactCanvasProps {
     onAction?: (prompt: string) => void;
+    onReference?: (id: string) => void;
 }
 
 /**
  * Canvas with proper hydration and empty state handling
  */
-export function ArtifactCanvas({ onAction }: ArtifactCanvasProps = {}) {
+export function ArtifactCanvas({ onAction, onReference }: ArtifactCanvasProps = {}) {
     const hasHydrated = useArtifactHydration();
     const artifacts = useArtifactStore((state) => state.artifacts);
 
@@ -59,7 +61,7 @@ export function ArtifactCanvas({ onAction }: ArtifactCanvasProps = {}) {
     return (
         <div className="space-y-6">
             {artifactIds.map(id => (
-                <ArtifactRenderer key={id} artifactId={id} onAction={onAction} />
+                <ArtifactRenderer key={id} artifactId={id} onAction={onAction} onReference={onReference} />
             ))}
         </div>
     );
@@ -95,7 +97,7 @@ function MutationHistoryDropdown({ artifactId, currentVersion }: { artifactId: s
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 transition-colors text-xs"
             >
-                <span className="text-purple-400">v{currentVersion}</span>
+                <span className="text-teal-300">v{currentVersion}</span>
                 {mutations.length > 0 && (
                     <span className="text-gray-500">({mutations.length} changes)</span>
                 )}
@@ -219,7 +221,7 @@ function RelatedArtifacts({ artifactId }: { artifactId: string }) {
                     <a
                         key={relationship.id}
                         href={`#artifact-${artifact.id}`}
-                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 hover:border-indigo-500/30 transition-colors text-xs"
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 hover:border-teal-500/30 transition-colors text-xs"
                     >
                         <span>{typeLabels[relationship.type] || '🔗'}</span>
                         <span className="text-blue-400 font-mono">#{artifact.id}</span>
@@ -234,60 +236,12 @@ function RelatedArtifacts({ artifactId }: { artifactId: string }) {
 /**
  * Artifact Actions (suggested next steps)
  */
-function ArtifactActions({ artifact, onAction }: { artifact: Artifact; onAction?: (prompt: string) => void }) {
-    // Generate contextual actions based on artifact type
-    const getActions = () => {
-        const actions: { label: string; prompt: string; icon: string }[] = [];
-
-        if (artifact.type === 'ExecutionPlan') {
-            const steps = artifact.state?.steps || [];
-            if (steps.length > 0) {
-                actions.push(
-                    { label: 'Add a step', prompt: `Add a new step to plan #${artifact.id}`, icon: '➕' },
-                    { label: 'Optimize timeline', prompt: `Optimize the timeline for plan #${artifact.id}`, icon: '⚡' },
-                );
-            }
-        } else if (artifact.type === 'SystemStatusPanel') {
-            actions.push(
-                { label: 'Diagnose issues', prompt: `Diagnose issues in system status #${artifact.id}`, icon: '🔍' },
-                { label: 'Get recommendations', prompt: `Get recommendations based on status #${artifact.id}`, icon: '💡' },
-            );
-        } else if (artifact.type === 'CommandResultPanel') {
-            actions.push(
-                { label: 'Expand analysis', prompt: `Expand the analysis in #${artifact.id}`, icon: '📊' },
-                { label: 'Create action plan', prompt: `Create an action plan based on #${artifact.id}`, icon: '📋' },
-            );
-        }
-
-        return actions;
-    };
-
-    const actions = getActions();
-    if (actions.length === 0) return null;
-
-    return (
-        <div className="mt-4 pt-4 border-t border-white/5">
-            <p className="text-xs text-gray-500 mb-2">Suggested Actions</p>
-            <div className="flex flex-wrap gap-2">
-                {actions.map((action, i) => (
-                    <button
-                        key={i}
-                        onClick={() => onAction?.(action.prompt)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors text-xs text-indigo-300"
-                    >
-                        <span>{action.icon}</span>
-                        {action.label}
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-}
+// ArtifactActions deleted as per user request for system-generated UI only
 
 /**
  * Renders a single artifact with header showing ID, type, version, and mutation history
  */
-export function ArtifactRenderer({ artifactId, onAction }: { artifactId: string; onAction?: (prompt: string) => void }) {
+export function ArtifactRenderer({ artifactId, onAction, onReference }: { artifactId: string; onAction?: (prompt: string) => void; onReference?: (id: string) => void }) {
     const artifact = useArtifactStore((state) => state.artifacts[artifactId]);
     const deleteArtifact = useArtifactStore((state) => state.deleteArtifact);
 
@@ -308,13 +262,20 @@ export function ArtifactRenderer({ artifactId, onAction }: { artifactId: string;
     }
 
     return (
-        <div id={`artifact-${artifactId}`} className="relative group">
+        <div id={`artifact-${artifactId}`} className="relative group animate-artifact-pop">
             {/* Artifact header */}
             <div className="flex items-center justify-between mb-3 text-sm flex-wrap gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-blue-400 font-mono text-xs">#{artifactId}</span>
+                    <button
+                        onClick={() => onReference?.(artifactId)}
+                        className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/40 text-blue-400 font-mono text-xs transition-all cursor-pointer group/id"
+                        title="Click to reference in command"
+                    >
+                        <span className="opacity-70 group-hover/id:opacity-100">#</span>
+                        {artifactId}
+                    </button>
                     <span className="text-gray-500">•</span>
-                    <span className="text-gray-400">{artifact.type}</span>
+                    <span className="text-gray-400 font-medium">{artifact.type}</span>
 
                     {/* Mutation History Dropdown */}
                     <MutationHistoryDropdown artifactId={artifactId} currentVersion={artifact.version} />
@@ -348,8 +309,7 @@ export function ArtifactRenderer({ artifactId, onAction }: { artifactId: string;
             {/* Related Artifacts */}
             <RelatedArtifacts artifactId={artifactId} />
 
-            {/* Suggested Actions */}
-            <ArtifactActions artifact={artifact} onAction={onAction} />
+
         </div>
     );
 }
@@ -367,6 +327,8 @@ function ArtifactContent({ artifact }: { artifact: Artifact }) {
             return <ExecutionPlanContent state={state} artifactId={id} />;
         case 'SystemStatusPanel':
             return <SystemStatusContent state={state} />;
+        case 'KanbanBoard':
+            return <KanbanBoardContent state={state} artifactId={id} />;
         default:
             return <GenericContent state={state} />;
     }
@@ -377,7 +339,7 @@ function ArtifactContent({ artifact }: { artifact: Artifact }) {
  */
 function CommandResultContent({ state }: { state: any }) {
     return (
-        <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm">
+        <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm transition-all duration-300 hover:border-white/10">
             {state.title && (
                 <h3 className="text-xl font-semibold text-white mb-4">{state.title}</h3>
             )}
@@ -389,9 +351,9 @@ function CommandResultContent({ state }: { state: any }) {
             {state.details && state.details.length > 0 && (
                 <div className="space-y-3">
                     {state.details.map((detail: any, i: number) => (
-                        <div key={i} className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
-                            <p className="text-gray-400">{detail}</p>
+                        <div key={i} className="flex items-start gap-3 group/item">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0 group-hover/item:scale-125 transition-transform duration-200" />
+                            <p className="text-gray-400 group-hover/item:text-gray-300 transition-colors duration-200">{detail}</p>
                         </div>
                     ))}
                 </div>
@@ -499,8 +461,8 @@ function ExecutionPlanContent({ state, artifactId, onEdit }: {
             {state.steps && state.steps.length > 0 && (
                 <div className="space-y-4">
                     {state.steps.map((step: any, i: number) => (
-                        <div key={i} className="flex gap-4 group/step">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                        <div key={i} className="flex gap-4 group/step hover:bg-white/[0.02] rounded-lg p-3 -m-3 transition-colors duration-200">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center group-hover/step:bg-blue-500/20 group-hover/step:border-blue-500/40 group-hover/step:scale-110 transition-all duration-200">
                                 <span className="text-sm font-semibold text-blue-400">{i + 1}</span>
                             </div>
                             <div className="flex-1 min-w-0">
@@ -602,6 +564,18 @@ function SystemStatusContent({ state }: { state: any }) {
         }
     };
 
+    // Handle empty/initializing state
+    if (!state.system_name && !state.overall_status && (!state.components || state.components.length === 0)) {
+        return (
+            <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm flex items-center justify-center h-48">
+                <div className="flex flex-col items-center gap-3 text-gray-500">
+                    <div className="w-6 h-6 rounded-full border-2 border-zinc-700 border-t-zinc-400 animate-spin" />
+                    <p className="text-sm">Initializing system monitor...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm">
             {state.system_name && (
@@ -643,6 +617,109 @@ function SystemStatusContent({ state }: { state: any }) {
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+/**
+ * Kanban Board rendering
+ */
+function KanbanBoardContent({ state, artifactId }: { state: any; artifactId?: string }) {
+    const updateArtifact = useArtifactStore((state) => state.updateArtifact);
+    const addMutation = useArtifactStore((state) => state.addMutation);
+
+    const handleCardMove = (taskId: string, fromColumnId: string, toColumnId: string) => {
+        if (!artifactId) return;
+
+        const newColumns = (state.columns || []).map((col: any) => {
+            if (col.id === fromColumnId) {
+                return {
+                    ...col,
+                    tasks: col.tasks.filter((t: any) => t.id !== taskId),
+                };
+            }
+            if (col.id === toColumnId) {
+                const task = (state.columns || [])
+                    .find((c: any) => c.id === fromColumnId)
+                    ?.tasks.find((cd: any) => cd.id === taskId);
+                if (task) {
+                    return {
+                        ...col,
+                        tasks: [...col.tasks, task],
+                    };
+                }
+            }
+            return col;
+        });
+
+        const newState = { ...state, columns: newColumns };
+        updateArtifact(artifactId, newState);
+        addMutation({
+            artifactId,
+            operation: 'update_item',
+            path: ['columns'],
+            value: { taskId, fromColumnId, toColumnId },
+            source: 'user',
+            reason: `Moved task to ${toColumnId}`,
+        });
+    };
+
+    const handleCardDelete = (taskId: string, columnId: string) => {
+        if (!artifactId) return;
+
+        const newColumns = (state.columns || []).map((col: any) => {
+            if (col.id === columnId) {
+                return {
+                    ...col,
+                    tasks: col.tasks.filter((t: any) => t.id !== taskId),
+                };
+            }
+            return col;
+        });
+
+        const newState = { ...state, columns: newColumns };
+        updateArtifact(artifactId, newState);
+        addMutation({
+            artifactId,
+            operation: 'remove_item',
+            path: ['tasks'],
+            value: taskId,
+            source: 'user',
+            reason: `Deleted task from ${columnId}`,
+        });
+    };
+
+    const handleCardAdd = (columnId: string, task: any) => {
+        if (!artifactId) return;
+
+        const newColumns = (state.columns || []).map((col: any) => {
+            if (col.id === columnId) {
+                return {
+                    ...col,
+                    tasks: [...col.tasks, task],
+                };
+            }
+            return col;
+        });
+
+        const newState = { ...state, columns: newColumns };
+        updateArtifact(artifactId, newState);
+        addMutation({
+            artifactId,
+            operation: 'add_item',
+            path: ['tasks'],
+            value: task,
+            source: 'user',
+            reason: `Added task to ${columnId}`,
+        });
+    };
+
+    return (
+        <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm">
+            <KanbanBoard
+                title={state.title}
+                columns={state.columns || []}
+            />
         </div>
     );
 }

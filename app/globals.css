@@ -1,23 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --background: #000000;
-  --foreground: #ffffff;
-  --accent: #6366f1;
-  --accent-glow: rgba(99, 102, 241, 0.4);
+  --background: #f6f1e9;
+  --foreground: #1f1a14;
+  --accent: #0ea5a5;
+  --accent-2: #f97316;
+  --accent-3: #f5c542;
+  --surface: #ffffff;
+  --surface-muted: #efe7dc;
+  --workspace: #0d1117;
+  --workspace-muted: #111827;
+  --accent-glow: rgba(14, 165, 165, 0.35);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-space);
+  --font-mono: var(--font-code);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -123,34 +129,14 @@ body {
 }
 
 @keyframes orb-float-1 {
-
-  0%,
-  100% {
+  0%, 100% {
     transform: translate(0, 0) scale(1);
-  }
-
-  33% {
-    transform: translate(30px, -30px) scale(1.1);
-  }
-
-  66% {
-    transform: translate(-20px, 20px) scale(0.95);
   }
 }
 
 @keyframes orb-float-2 {
-
-  0%,
-  100% {
+  0%, 100% {
     transform: translate(0, 0) scale(1);
-  }
-
-  33% {
-    transform: translate(-40px, 20px) scale(0.9);
-  }
-
-  66% {
-    transform: translate(20px, -40px) scale(1.05);
   }
 }
 
@@ -214,6 +200,31 @@ body {
   -webkit-backdrop-filter: blur(20px);
 }
 
+/* Force GPU acceleration for smooth animations */
+.artifact-canvas,
+.workspace-container {
+  transform: translateZ(0);
+  will-change: contents;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Optimize rendering */
+.prose {
+  contain: content;
+}
+
+.artifact-item {
+  contain: layout style paint;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -230,4 +241,136 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* ========== MOBILE RESPONSIVE ========== */
+@media (max-width: 768px) {
+  /* Make text readable without zoom */
+  input,
+  button,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Main layout */
+  main {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  /* Header */
+  header {
+    margin-bottom: 1.5rem;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+  }
+
+  p {
+    font-size: 0.95rem;
+  }
+
+  /* Input area */
+  .workspace-input,
+  .command-input {
+    flex-direction: column;
+  }
+
+  input[type='text'] {
+    height: auto;
+    padding: 0.75rem;
+  }
+
+  /* Workspace container */
+  .workspace-container {
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Grid layouts */
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-cols-4 {
+    grid-template-columns: 1fr;
+  }
+
+  /* Artifact canvas */
+  .artifact-canvas {
+    gap: 1rem;
+  }
+
+  /* Buttons */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Header bar */
+  .workspace-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  /* Hide desktop-only elements */
+  .hidden-mobile {
+    display: none;
+  }
+
+  /* Adjust spacing */
+  .space-y-6 {
+    gap: 1.5rem;
+  }
+
+  .gap-4 {
+    gap: 1rem;
+  }
+
+  /* Modal/Dropdown positioning */
+  .fixed {
+    position: static;
+    width: 100%;
+  }
+
+  /* Reduce padding on smaller screens */
+  .px-6 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .py-4 {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.875rem;
+  }
+
+  .text-lg {
+    font-size: 0.95rem;
+  }
+
+  /* Extra tight on small phones */
+  main {
+    padding: 0.75rem;
+  }
+
+  button {
+    font-size: 0.875rem;
+  }
 }

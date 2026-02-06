@@ -41,6 +41,31 @@ export const ARTIFACT_SCHEMAS: Record<string, z.ZodSchema> = {
         ).default([]),
         metrics: z.record(z.string(), z.string()).optional(),
     }),
+
+    KanbanBoard: z.object({
+        title: z.string().default('Kanban Board'),
+        columns: z.array(
+            z.object({
+                id: z.string(),
+                title: z.string(),
+                tasks: z.array(
+                    z.object({
+                        id: z.string(),
+                        title: z.string(),
+                        description: z.string().optional(),
+                        priority: z.enum(['low', 'medium', 'high']).default('medium'),
+                        assignee: z.string().optional(),
+                        dueDate: z.string().optional(),
+                        tags: z.array(z.string()).default([]),
+                    })
+                ).default([]),
+            })
+        ).default([
+            { id: 'todo', title: 'To Do', tasks: [] },
+            { id: 'in-progress', title: 'In Progress', tasks: [] },
+            { id: 'done', title: 'Done', tasks: [] },
+        ]),
+    }),
 };
 
 // ============================================================================
