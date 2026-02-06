@@ -362,7 +362,7 @@ function ArtifactContent({ artifact }: { artifact: Artifact }) {
 
     switch (type) {
         case 'CommandResultPanel':
-            return <CommandResultContent state={state} />;
+            return <CommandResultContent state={state} artifactId={id} />;
         case 'ExecutionPlan':
             return <ExecutionPlanContent state={state} artifactId={id} />;
         case 'SystemStatusPanel':
@@ -372,14 +372,68 @@ function ArtifactContent({ artifact }: { artifact: Artifact }) {
     }
 }
 
-/**
- * Command Result Panel rendering
- */
-function CommandResultContent({ state }: { state: any }) {
+function CommandResultContent({ state, artifactId }: { state: any; artifactId?: string }) {
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [editTitleValue, setEditTitleValue] = useState(state.title || '');
+    const updateArtifact = useArtifactStore((state) => state.updateArtifact);
+    const addMutation = useArtifactStore((state) => state.addMutation);
+
+    const handleTitleSave = () => {
+        if (!artifactId || editTitleValue === state.title) {
+            setIsEditingTitle(false);
+            return;
+        }
+
+        const newState = { ...state, title: editTitleValue };
+        updateArtifact(artifactId, newState);
+        addMutation({
+            artifactId,
+            operation: 'update_property',
+            path: ['title'],
+            value: editTitleValue,
+            previousValue: state.title,
+            source: 'user',
+            reason: 'Edited title',
+        });
+        setIsEditingTitle(false);
+    };
+
     return (
-        <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm">
+        <div className="border border-white/5 rounded-xl p-6 bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm group">
+            {/* Title with edit */}
             {state.title && (
-                <h3 className="text-xl font-semibold text-white mb-4">{state.title}</h3>
+                <div className="flex items-center gap-2 mb-4">
+                    {isEditingTitle ? (
+                        <input
+                            type="text"
+                            value={editTitleValue}
+                            onChange={(e) => setEditTitleValue(e.target.value)}
+                            onBlur={handleTitleSave}
+                            onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
+                            className="flex-1 text-xl font-semibold text-white bg-white/5 border border-blue-500/30 rounded-lg px-3 py-1 focus:outline-none focus:border-blue-500"
+                            autoFocus
+                        />
+                    ) : (
+                        <h3
+                            className={`text-xl font-semibold text-white flex-1 ${artifactId ? 'cursor-pointer hover:bg-white/5 rounded px-2 py-1 -mx-2 transition-colors' : ''}`}
+                            onClick={() => artifactId && setIsEditingTitle(true)}
+                            title={artifactId ? "Click to edit title" : undefined}
+                        >
+                            {state.title}
+                        </h3>
+                    )}
+                    {artifactId && !isEditingTitle && (
+                        <button
+                            onClick={() => setIsEditingTitle(true)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-400 transition-all p-1"
+                            title="Edit title"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
             )}
 
             {state.summary && (
@@ -397,11 +451,30 @@ function CommandResultContent({ state }: { state: any }) {
                 </div>
             )}
 
+            {/* Show items if present (from schema) */}
+            {state.items && state.items.length > 0 && (
+                <div className="space-y-2 mt-4">
+                    {state.items.map((item: string, i: number) => (
+                        <div key={i} className="flex items-start gap-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
+                            <p className="text-gray-400">{item}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {state.recommendation && (
                 <div className="mt-6 pt-6 border-t border-white/5">
                     <p className="text-sm text-gray-500 mb-2">Recommendation</p>
                     <p className="text-white">{state.recommendation}</p>
                 </div>
+            )}
+
+            {/* Inline edit hint */}
+            {artifactId && (
+                <p className="text-xs text-gray-600 mt-4 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    💡 Click title to edit
+                </p>
             )}
         </div>
     );
@@ -492,8 +565,21 @@ function ExecutionPlanContent({ state, artifactId, onEdit }: {
                 <h3 className="text-xl font-semibold text-white mb-2">{state.title}</h3>
             )}
 
+            {/* Show goal if present */}
+            {state.goal && (
+                <p className="text-gray-400 mb-4">{state.goal}</p>
+            )}
+
             {state.objective && (
                 <p className="text-gray-400 mb-6">{state.objective}</p>
+            )}
+
+            {/* Empty state when no steps */}
+            {(!state.steps || state.steps.length === 0) && (
+                <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No steps defined yet.</p>
+                    <p className="text-xs mt-1">The AI may still be generating content...</p>
+                </div>
             )}
 
             {state.steps && state.steps.length > 0 && (

@@ -250,9 +250,9 @@ export default function Home() {
   }, [artifactSystem]);
 
   const demoPrompts = [
-    { label: "Analyze system health", icon: "📊" },
-    { label: "Create a deployment plan", icon: "📋" },
-    { label: "Review code quality", icon: "⚡" },
+    { label: "Create a 5-step deployment plan", icon: "📋" },
+    { label: "Show system status with CPU and memory", icon: "📊" },
+    { label: "Analyze the codebase quality", icon: "⚡" },
   ];
 
   const handleGenerate = async () => {
