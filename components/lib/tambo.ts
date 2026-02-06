@@ -36,17 +36,22 @@ export const components: TamboComponent[] = [
 
 Trigger words: "compare", "decide", "choose", "options", "versus", "vs", "which is better", "pros and cons", "evaluate", "matrix"
 
-This renders an INTERACTIVE comparison table with:
-- Options as rows
-- Criteria as columns with weights (importance)
-- Editable scores (1-10)
-- Auto-calculated totals
-- Highlighted recommendation
+This renders an INTERACTIVE comparison table with editable scores (1-10), weights, and auto-calculated totals.
 
-Example uses:
-- "Compare 3 laptop options"
-- "Help me decide between React, Vue, and Angular"
-- "Create a decision matrix for choosing a database"
+ALWAYS populate criteria and options with real data. Example for "Compare React vs Vue vs Angular":
+{
+  "question": "Which frontend framework should you use?",
+  "criteria": [
+    { "id": "c1", "name": "Learning Curve", "weight": 7 },
+    { "id": "c2", "name": "Performance", "weight": 8 },
+    { "id": "c3", "name": "Ecosystem", "weight": 6 }
+  ],
+  "options": [
+    { "id": "o1", "name": "React", "scores": [{ "criterionId": "c1", "score": 6 }, { "criterionId": "c2", "score": 8 }, { "criterionId": "c3", "score": 9 }] },
+    { "id": "o2", "name": "Vue", "scores": [{ "criterionId": "c1", "score": 8 }, { "criterionId": "c2", "score": 8 }, { "criterionId": "c3", "score": 7 }] },
+    { "id": "o3", "name": "Angular", "scores": [{ "criterionId": "c1", "score": 4 }, { "criterionId": "c2", "score": 7 }, { "criterionId": "c3", "score": 8 }] }
+  ]
+}
 `,
         component: DecisionMatrix,
         propsSchema: z.object({
